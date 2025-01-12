@@ -1,175 +1,286 @@
 <script setup>
-import { ref } from "vue";
+import { ref, nextTick, computed, onMounted } from "vue";
 import { useForm } from "@inertiajs/vue3";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
-import "highlight.js/styles/atom-one-dark.css"; // Ajout du thème de coloration
+import "highlight.js/styles/atom-one-dark.css"; // Thème
 
-// Props reçues via Inertia (conforme au contrôleur)
+// Props via Inertia
 const props = defineProps({
-    flash: Object, // Messages flash (success ou erreur)
-    models: Array, // Liste des modèles récupérés par ChatService
-    selectedModel: String, // Modèle par défaut
+    flash: Object,
+    models: Array,
+    selectedModel: String,
 });
 
-// Création d'un tableau pour stocker l'historique des conversations
+// Historique des conversations
 const conversationHistory = ref([]);
 
-// Initialisation des états
+// Élément où on scroll
+const messagesContainer = ref(null);
+
+// État de chargement
+const isLoading = ref(false);
+
+// Formulaire
 const form = useForm({
     message: "",
-    model: props.selectedModel || "", // Définit le modèle sélectionné par défaut
+    model: props.selectedModel || "",
 });
 
-// Fonction simplifiée pour copier le texte
-const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text).then(() => {
-        // On pourrait ajouter une notification toast ici si besoin
-    });
-};
-
-// Configuration simplifiée de MarkdownIt
-const md = new MarkdownIt({
-    highlight: (code, lang) => {
-        if (lang && hljs.getLanguage(lang)) {
-            try {
-                const highlighted = hljs.highlight(code, { language: lang }).value;
-                return `
-                    <div class="code-block">
-                        <button class="copy-button" onclick="navigator.clipboard.writeText(\`${code.replace(/`/g, '\\`')}\`)">
-                            Copier
-                        </button>
-                        <pre><code class="hljs">${highlighted}</code></pre>
-                    </div>`;
-            } catch (e) {
-                console.error(e);
-            }
+// Copie vers le presse-papiers (avec fallback hors HTTPS)
+function copyToClipboard(text) {
+    if (navigator.clipboard) {
+        navigator.clipboard
+            .writeText(text)
+            .then(() => {
+                alert("Texte copié !");
+            })
+            .catch((error) => {
+                console.error("Échec de la copie via clipboard API :", error);
+            });
+    } else {
+        try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand("copy");
+            document.body.removeChild(textarea);
+            alert("Texte copié (fallback) !");
+        } catch (error) {
+            console.error("Échec du fallback :", error);
         }
-        return `<pre><code>${md.utils.escapeHtml(code)}</code></pre>`;
     }
+}
+
+// Configuration de MarkdownIt
+const md = new MarkdownIt({
+    html: false,
+    highlight: (code, lang) => {
+        // ID unique pour le <code>
+        const uniqueId = `code-${Math.random().toString(36).substr(2, 9)}`;
+        // Coloration syntaxique ou échappement
+        const highlightedCode =
+            lang && hljs.getLanguage(lang)
+                ? hljs.highlight(code, { language: lang }).value
+                : md.utils.escapeHtml(code);
+
+        // Ici, on retourne un bloc plus élégant,
+        // avec une bordure, un fond sombre, un bouton stylé, etc.
+        return `
+      <div class="relative border border-gray-700 rounded-lg bg-gray-800 my-4 code-block shadow-md">
+        <!-- Bouton Copier -->
+        <button
+          class="absolute right-2 top-2 inline-flex items-center gap-1 px-3 py-1 text-sm font-medium text-gray-200 bg-gray-700 hover:bg-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-emerald-600 copy-btn"
+          data-code="${code.replace(/"/g, "&quot;")}"
+        >
+          <!-- Icône (optionnelle) -->
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+               viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M8 16h8m-8-4h8m-8-4h8M4 6h16v12H4z"/>
+          </svg>
+          Copier
+        </button>
+
+        <!-- Zone de code -->
+        <pre class="overflow-x-auto text-gray-300">
+<code id="${uniqueId}" class="hljs ${lang || ""}">${highlightedCode}</code>
+        </pre>
+      </div>
+    `;
+    },
 });
 
-// Soumission du formulaire
-const handleSubmit = () => {
+// Rendu Markdown
+const renderMarkdown = (text) => md.render(text || "");
+
+// Soumission de question
+function handleSubmit() {
     const question = form.message;
+    isLoading.value = true;
 
     form.post("/ask", {
         onSuccess: () => {
-            // Ajout de la nouvelle conversation à l'historique
             if (props.flash.message) {
                 conversationHistory.value.push({
                     question: question,
                     answer: props.flash.message,
                     timestamp: new Date(),
                 });
+                form.reset("message");
+                scrollToBottom();
             }
-            form.reset("message"); // Réinitialise seulement le champ "message"
+            isLoading.value = false;
         },
-        preserveScroll: true, // Garde la position du scroll
+        preserveScroll: true,
         onError: (errors) => {
-            console.error("Erreurs lors de la soumission :", errors);
+            console.error("Erreurs :", errors);
+            isLoading.value = false;
         },
     });
-};
+}
 
-// Fonction pour rendre le Markdown en HTML
-const renderMarkdown = (text) => {
-    return md.render(text || "");
-};
+// Scroll auto
+function scrollToBottom() {
+    nextTick(() => {
+        if (messagesContainer.value) {
+            messagesContainer.value.scrollTop =
+                messagesContainer.value.scrollHeight;
+        }
+    });
+}
+
+const filteredModels = computed(() => {
+    return props.models.filter(
+        (model) =>
+            model.name !== "meta-llama/llama-3.2-11b-vision-instruct:free"
+    );
+});
+
+onMounted(() => {
+    if (!form.model) {
+        form.model = "meta-llama/llama-3.2-11b-vision-instruct:free";
+    }
+    // Gérer le clic global pour copier
+    document.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target && target.classList.contains("copy-btn")) {
+            const codeToCopy = target.getAttribute("data-code");
+            if (codeToCopy) {
+                copyToClipboard(codeToCopy);
+            }
+        }
+    });
+});
 </script>
 
 <template>
-    <div class="min-h-screen bg-gray-900 p-8 text-gray-100">
-        <div class="max-w-4xl mx-auto space-y-8">
-            <!-- Affichage des erreurs -->
-            <div
-                v-if="props.flash.error"
-                class="bg-red-900/50 text-red-200 p-6 rounded-lg border border-red-700/50 shadow-xl"
-            >
-                <p class="flex items-center">
-                    <span class="material-icons mr-2">error</span>
-                    {{ props.flash.error }}
-                </p>
-            </div>
-
-            <!-- Historique des conversations -->
-            <div class="space-y-6">
-                <div
-                    v-for="(conversation, index) in conversationHistory"
-                    :key="index"
-                    class="space-y-4"
-                >
-                    <!-- Question -->
-                    <div
-                        class="bg-blue-900/30 p-6 rounded-lg border border-blue-700/50 shadow-lg"
-                    >
-                        <div class="flex justify-between items-start">
-                            <h3 class="text-blue-300 text-sm font-medium mb-2">
-                                Ma question:
-                            </h3>
-                            <span class="text-xs text-gray-400">
-                                {{
-                                    new Date(
-                                        conversation.timestamp
-                                    ).toLocaleTimeString()
-                                }}
-                            </span>
-                        </div>
-                        <p class="text-gray-200">{{ conversation.question }}</p>
-                    </div>
-
-                    <!-- Réponse -->
-                    <div
-                        class="bg-emerald-900/30 p-6 rounded-lg border border-emerald-700/50 shadow-lg prose prose-invert max-w-none"
-                    >
-                        <h3 class="text-emerald-300 text-sm font-medium mb-2">
-                            Réponse:
-                        </h3>
-                        <div v-html="renderMarkdown(conversation.answer)"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Formulaire -->
-            <form
-                @submit.prevent="handleSubmit"
-                class="space-y-6 sticky bottom-8 bg-gray-900/95 p-6 rounded-lg border border-gray-700/50 backdrop-blur-sm"
-            >
-                <!-- Champ pour le message -->
-                <div class="relative">
-                    <textarea
-                        v-model="form.message"
-                        class="w-full p-4 bg-gray-800/50 border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-gray-100 placeholder-gray-400 resize-none min-h-[120px] transition-all duration-300"
-                        placeholder="Posez votre question ici..."
-                        required
-                    />
-                </div>
-
-                <!-- Sélecteur pour le modèle -->
+    <div class="flex h-screen flex-col bg-gray-900">
+        <!-- En-tête -->
+        <header
+            class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900/80 backdrop-blur"
+        >
+            <div class="mx-auto max-w-5xl px-4 py-3">
                 <select
                     v-model="form.model"
-                    class="w-full p-4 bg-gray-800/50 border border-gray-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-gray-100 transition-all duration-300"
+                    class="w-full max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
                     required
                 >
-                    <option disabled value="" class="bg-gray-800">
-                        Choisissez un modèle
+                    <option
+                        value="meta-llama/llama-3.2-11b-vision-instruct:free"
+                    >
+                        Llama 3.2 (Recommandé)
                     </option>
                     <option
-                        v-for="model in props.models"
+                        v-for="model in filteredModels"
                         :key="model.id"
                         :value="model.name"
-                        class="bg-gray-800"
                     >
                         {{ model.name }}
                     </option>
                 </select>
+            </div>
+        </header>
 
-                <!-- Bouton pour soumettre -->
+        <!-- Zone des messages -->
+        <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-8">
+            <div class="mx-auto max-w-3xl space-y-6">
+                <!-- Message d'accueil -->
+                <div
+                    v-if="conversationHistory.length === 0"
+                    class="flex items-start gap-4 px-4"
+                >
+                    <div
+                        class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
+                    >
+                        <span class="text-white text-sm">AI</span>
+                    </div>
+                    <div class="flex-1 space-y-2">
+                        <div
+                            class="bg-gray-800/50 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                        >
+                            <div class="prose prose-invert max-w-none">
+                                <p>
+                                    Coucou ! Je suis ton IA. Que puis-je faire
+                                    pour toi aujourd’hui ?
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Historique des conversations -->
+                <template
+                    v-for="(conversation, index) in conversationHistory"
+                    :key="index"
+                >
+                    <!-- Message utilisateur -->
+                    <div class="flex flex-row-reverse items-start gap-4 px-4">
+                        <div
+                            class="size-8 rounded-full bg-emerald-600 flex items-center justify-center"
+                        >
+                            <span class="text-white text-sm">U</span>
+                        </div>
+                        <div class="flex-1 space-y-2">
+                            <div class="flex justify-end">
+                                <p
+                                    class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%]"
+                                >
+                                    {{ conversation.question }}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Réponse IA -->
+                    <div class="flex items-start gap-4 px-4">
+                        <div
+                            class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
+                        >
+                            <span class="text-white text-sm">AI</span>
+                        </div>
+                        <div class="flex-1 space-y-2">
+                            <div
+                                class="bg-gray-800/50 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                            >
+                                <div class="prose prose-invert max-w-none">
+                                    <div
+                                        v-html="
+                                            renderMarkdown(conversation.answer)
+                                        "
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Zone de saisie -->
+        <div class="border-t border-gray-700/50 bg-gray-900 px-4 py-4">
+            <form
+                @submit.prevent="handleSubmit"
+                class="mx-auto max-w-3xl relative"
+            >
+                <textarea
+                    v-model="form.message"
+                    class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-20 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
+                    :rows="1"
+                    placeholder="Posez votre question..."
+                    required
+                    @keydown.enter.exact.prevent="handleSubmit"
+                ></textarea>
                 <button
                     type="submit"
-                    class="w-full p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-lg transform transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:ring-offset-2 focus:ring-offset-gray-900"
+                    :disabled="isLoading || !form.message"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                 >
-                    Envoyer
+                    <span v-if="isLoading">...</span>
+                    <span v-else>Envoyer</span>
                 </button>
             </form>
         </div>
@@ -177,7 +288,8 @@ const renderMarkdown = (text) => {
 </template>
 
 <style scoped>
-/* Style spécifique si nécessaire */
+/* Styles Tailwind custom ou overrides */
+
 .prose-invert {
     --tw-prose-body: theme("colors.gray.300");
     --tw-prose-headings: theme("colors.gray.200");
@@ -188,50 +300,32 @@ const renderMarkdown = (text) => {
     --tw-prose-quotes: theme("colors.gray.200");
 }
 
-/* Animation de fade pour les messages */
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.5s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-}
-
-/* Style pour les blocs de code */
+/* Code block */
 .code-block {
-    position: relative;
+    background: #1e1e1e; /* Couleur de fond plus sombre */
     margin: 1rem 0;
-    background: #1e1e1e;
-    border-radius: 0.5rem;
 }
 
-.code-block pre {
-    margin: 0;
-    padding: 2.5rem 1rem 1rem;
+.code-header {
+    background: #2d2d2d;
 }
 
-.copy-button {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    padding: 0.25rem 0.75rem;
-    font-size: 0.75rem;
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
-}
-
-.copy-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-/* Assurer que le code est bien affiché */
 .hljs {
     background: transparent !important;
     padding: 0 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        monospace;
+}
+
+/* Pour la scrollbar, optionnel */
+::-webkit-scrollbar {
+    width: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+::-webkit-scrollbar-thumb {
+    background: #374151;
+    border-radius: 5px;
 }
 </style>
