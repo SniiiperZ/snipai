@@ -1,15 +1,30 @@
 <script setup>
 import { ref, nextTick, computed, onMounted } from "vue";
-import { useForm } from "@inertiajs/vue3";
+import { useForm, router } from "@inertiajs/vue3";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
 import "highlight.js/styles/atom-one-dark.css"; // Thème
+import DialogModal from "@/Components/DialogModal.vue";
+import SecondaryButton from "@/Components/SecondaryButton.vue";
+import DangerButton from "@/Components/DangerButton.vue";
 
 // Props via Inertia
 const props = defineProps({
     flash: Object,
     models: Array,
     selectedModel: String,
+    conversations: {
+        type: Array,
+        default: () => [],
+    },
+    currentConversation: {
+        type: Object,
+        default: null,
+    },
+    conversationHistory: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 // Historique des conversations
@@ -99,25 +114,48 @@ const renderMarkdown = (text) => md.render(text || "");
 
 // Soumission de question
 function handleSubmit() {
-    const question = form.message;
+    if (!form.message.trim()) return;
+
+    if (!currentConversation.value) {
+        startNewConversation();
+        return;
+    }
+
+    const message = form.message;
     isLoading.value = true;
 
-    form.post("/ask", {
-        onSuccess: () => {
-            if (props.flash.message) {
-                conversationHistory.value.push({
-                    question: question,
-                    answer: props.flash.message,
-                    timestamp: new Date(),
-                });
-                form.reset("message");
-                scrollToBottom();
-            }
-            isLoading.value = false;
-        },
+    form.post(route("ask", { conversation: currentConversation.value.id }), {
         preserveScroll: true,
-        onError: (errors) => {
-            console.error("Erreurs :", errors);
+        preserveState: true,
+        data: {
+            message: message,
+            model: form.model,
+        },
+        onSuccess: (response) => {
+            form.reset();
+
+            if (response?.props?.flash?.messages) {
+                conversationHistory.value = response.props.flash.messages;
+            }
+
+            if (response?.props?.flash?.currentConversation) {
+                currentConversation.value =
+                    response.props.flash.currentConversation;
+            }
+
+            nextTick(() => {
+                scrollToBottom();
+                isLoading.value = false;
+
+                if (
+                    !currentConversation.value?.title ||
+                    currentConversation.value.title === "Nouvelle conversation"
+                ) {
+                    generateTitle();
+                }
+            });
+        },
+        onError: () => {
             isLoading.value = false;
         },
     });
@@ -126,10 +164,14 @@ function handleSubmit() {
 // Scroll auto
 function scrollToBottom() {
     nextTick(() => {
-        if (messagesContainer.value) {
-            messagesContainer.value.scrollTop =
-                messagesContainer.value.scrollHeight;
-        }
+        setTimeout(() => {
+            if (messagesContainer.value) {
+                messagesContainer.value.scrollTo({
+                    top: messagesContainer.value.scrollHeight,
+                    behavior: "smooth",
+                });
+            }
+        }, 100); // Un petit délai pour s'assurer que le contenu est rendu
     });
 }
 
@@ -155,88 +197,239 @@ onMounted(() => {
         }
     });
 });
+
+// État pour les conversations
+const conversations = ref([]);
+const currentConversation = ref(null);
+
+// Fonction pour démarrer une nouvelle conversation
+function startNewConversation() {
+    form.post(route("conversations.store"), {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            if (page.props.currentConversation) {
+                currentConversation.value = page.props.currentConversation;
+                conversations.value = page.props.conversations;
+                // Réinitialiser l'historique des messages
+                conversationHistory.value = [];
+            }
+        },
+    });
+}
+
+// Fonction pour sélectionner une conversation
+function selectConversation(conversation) {
+    currentConversation.value = conversation;
+    loadMessages(conversation.id);
+}
+
+// Fonction pour charger les messages d'une conversation
+async function loadMessages(conversationId) {
+    try {
+        const response = await axios.get(
+            route("conversations.messages", conversationId)
+        );
+        if (response.data) {
+            conversationHistory.value = response.data;
+            await nextTick();
+            await scrollToBottom();
+        }
+    } catch (error) {
+        console.error("Erreur lors du chargement des messages:", error);
+    }
+}
+
+// Génération de titre
+async function generateTitle() {
+    try {
+        if (!currentConversation.value?.id) return;
+
+        const response = await axios.post(
+            route("conversations.generate-title", currentConversation.value.id)
+        );
+        if (response.data.title) {
+            currentConversation.value.title = response.data.title;
+            // Mettre à jour la conversation dans la liste
+            const index = conversations.value.findIndex(
+                (c) => c.id === currentConversation.value.id
+            );
+            if (index !== -1) {
+                conversations.value[index].title = response.data.title;
+            }
+        }
+    } catch (error) {
+        console.error("Erreur lors de la génération du titre:", error);
+    }
+}
+
+// Initialiser les refs avec les props
+conversations.value = props.conversations;
+currentConversation.value = props.currentConversation;
+conversationHistory.value = props.conversationHistory;
+
+// Fonction pour formater la date
+const formatDate = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleDateString("fr-FR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+};
+
+// Ajouter dans la section setup
+const confirmingDeletion = ref(false);
+const conversationToDelete = ref(null);
+const isDeleting = ref(false);
+
+const confirmDelete = (conversation) => {
+    conversationToDelete.value = conversation;
+    confirmingDeletion.value = true;
+};
+
+const closeDeleteModal = () => {
+    confirmingDeletion.value = false;
+    conversationToDelete.value = null;
+};
+
+const deleteConversation = () => {
+    if (!conversationToDelete.value) return;
+
+    isDeleting.value = true;
+
+    router.delete(
+        route("conversations.destroy", conversationToDelete.value.id),
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeDeleteModal();
+                if (
+                    currentConversation.value?.id ===
+                    conversationToDelete.value.id
+                ) {
+                    currentConversation.value = null;
+                    conversationHistory.value = [];
+                }
+            },
+            onFinish: () => {
+                isDeleting.value = false;
+            },
+        }
+    );
+};
 </script>
 
 <template>
-    <div class="flex h-screen flex-col bg-gray-900">
-        <!-- En-tête -->
-        <header
-            class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900/80 backdrop-blur"
-        >
-            <div class="mx-auto max-w-5xl px-4 py-3">
-                <select
-                    v-model="form.model"
-                    class="w-full max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
-                    required
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-800 border-r border-gray-700">
+            <!-- Nouveau bouton conversation -->
+            <div class="p-4">
+                <button
+                    @click="startNewConversation"
+                    class="w-full px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
                 >
-                    <option
-                        value="meta-llama/llama-3.2-11b-vision-instruct:free"
-                    >
-                        Llama 3.2 (Recommandé)
-                    </option>
-                    <option
-                        v-for="model in filteredModels"
-                        :key="model.id"
-                        :value="model.name"
-                    >
-                        {{ model.name }}
-                    </option>
-                </select>
+                    Nouvelle conversation
+                </button>
             </div>
-        </header>
 
-        <!-- Zone des messages -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-8">
-            <div class="mx-auto max-w-3xl space-y-6">
-                <!-- Message d'accueil -->
+            <!-- Liste des conversations -->
+            <div class="overflow-y-auto">
                 <div
-                    v-if="conversationHistory.length === 0"
-                    class="flex items-start gap-4 px-4"
+                    v-for="conv in conversations"
+                    :key="conv.id"
+                    class="p-4 cursor-pointer hover:bg-gray-700 relative group"
+                    :class="[
+                        currentConversation?.id === conv.id
+                            ? 'bg-gray-700'
+                            : '',
+                    ]"
                 >
-                    <div
-                        class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
-                    >
-                        <span class="text-white text-sm">AI</span>
-                    </div>
-                    <div class="flex-1 space-y-2">
+                    <div class="flex items-center justify-between">
                         <div
-                            class="bg-gray-800/50 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                            class="flex-1 min-w-0 mr-2"
+                            @click="selectConversation(conv)"
                         >
-                            <div class="prose prose-invert max-w-none">
-                                <p>
-                                    Coucou ! Je suis ton IA. Que puis-je faire
-                                    pour toi aujourd’hui ?
+                            <div class="flex items-center">
+                                <p
+                                    class="text-sm text-gray-300 truncate hover:text-gray-100"
+                                    :title="
+                                        conv.title || 'Nouvelle conversation'
+                                    "
+                                >
+                                    {{ conv.title || "Nouvelle conversation" }}
                                 </p>
+                                <button
+                                    @click.stop="confirmDelete(conv)"
+                                    class="ml-2 p-1.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Supprimer la conversation"
+                                >
+                                    <svg
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        class="h-4 w-4"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                        />
+                                    </svg>
+                                </button>
                             </div>
+                            <p class="text-xs text-gray-500">
+                                {{ formatDate(conv.created_at) }}
+                            </p>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Historique des conversations -->
-                <template
-                    v-for="(conversation, index) in conversationHistory"
-                    :key="index"
-                >
-                    <!-- Message utilisateur -->
-                    <div class="flex flex-row-reverse items-start gap-4 px-4">
-                        <div
-                            class="size-8 rounded-full bg-emerald-600 flex items-center justify-center"
+        <!-- Zone principale -->
+        <div class="flex-1 flex flex-col">
+            <!-- En-tête -->
+            <header
+                class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900 backdrop-blur"
+            >
+                <div class="mx-auto max-w-5xl px-4 py-3">
+                    <select
+                        v-model="form.model"
+                        class="w-full max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
+                        required
+                    >
+                        <option
+                            value="meta-llama/llama-3.2-11b-vision-instruct:free"
                         >
-                            <span class="text-white text-sm">U</span>
-                        </div>
-                        <div class="flex-1 space-y-2">
-                            <div class="flex justify-end">
-                                <p
-                                    class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%]"
-                                >
-                                    {{ conversation.question }}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                            Llama 3.2 (Recommandé)
+                        </option>
+                        <option
+                            v-for="model in filteredModels"
+                            :key="model.id"
+                            :value="model.name"
+                        >
+                            {{ model.name }}
+                        </option>
+                    </select>
+                </div>
+            </header>
 
-                    <!-- Réponse IA -->
-                    <div class="flex items-start gap-4 px-4">
+            <!-- Zone des messages -->
+            <div
+                ref="messagesContainer"
+                class="flex-1 overflow-y-auto px-4 py-8 bg-gray-800"
+            >
+                <div class="mx-auto max-w-3xl space-y-6">
+                    <!-- Message d'accueil -->
+                    <div
+                        v-if="conversationHistory.length === 0"
+                        class="flex items-start gap-4 px-4"
+                    >
                         <div
                             class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
                         >
@@ -244,47 +437,149 @@ onMounted(() => {
                         </div>
                         <div class="flex-1 space-y-2">
                             <div
-                                class="bg-gray-800/50 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                                class="bg-gray-900 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
                             >
                                 <div class="prose prose-invert max-w-none">
-                                    <div
-                                        v-html="
-                                            renderMarkdown(conversation.answer)
-                                        "
-                                    ></div>
+                                    <p>
+                                        Coucou ! Je suis ton IA. Que puis-je
+                                        faire pour toi aujourd’hui ?
+                                    </p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </template>
+
+                    <!-- Historique des conversations -->
+                    <template
+                        v-for="(conversation, index) in conversationHistory"
+                        :key="index"
+                    >
+                        <!-- Message utilisateur -->
+                        <div
+                            v-if="conversation.question"
+                            class="flex flex-row-reverse items-start gap-4 px-4"
+                        >
+                            <div
+                                class="size-8 rounded-full bg-emerald-600 flex items-center justify-center"
+                            >
+                                <span class="text-white text-sm">U</span>
+                            </div>
+                            <div class="flex-1 space-y-2">
+                                <div class="flex justify-end">
+                                    <p
+                                        class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%]"
+                                    >
+                                        {{ conversation.question }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Réponse IA -->
+                        <div
+                            v-if="conversation.answer"
+                            class="flex items-start gap-4 px-4"
+                        >
+                            <div
+                                class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
+                            >
+                                <span class="text-white text-sm">AI</span>
+                            </div>
+                            <div class="flex-1 space-y-2">
+                                <div
+                                    class="bg-gray-900 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                                >
+                                    <div class="prose prose-invert max-w-none">
+                                        <div
+                                            v-html="
+                                                renderMarkdown(
+                                                    conversation.answer
+                                                )
+                                            "
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Zone de saisie -->
+            <div class="border-t border-gray-700/50 bg-gray-900 px-4 py-4">
+                <form
+                    @submit.prevent="handleSubmit"
+                    class="mx-auto max-w-3xl relative"
+                >
+                    <textarea
+                        v-model="form.message"
+                        :key="`textarea-${
+                            currentConversation?.id || 'new'
+                        }-${Date.now()}`"
+                        class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-20 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
+                        :rows="1"
+                        placeholder="Posez votre question..."
+                        required
+                        @keydown.enter.exact.prevent="handleSubmit"
+                    ></textarea>
+                    <button
+                        type="submit"
+                        :disabled="isLoading || !form.message"
+                        class="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                        <template v-if="isLoading">
+                            <svg
+                                class="animate-spin h-5 w-5 text-white"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                            >
+                                <circle
+                                    class="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    stroke-width="4"
+                                ></circle>
+                                <path
+                                    class="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                            </svg>
+                        </template>
+                        <span v-else>Envoyer</span>
+                    </button>
+                </form>
             </div>
         </div>
-
-        <!-- Zone de saisie -->
-        <div class="border-t border-gray-700/50 bg-gray-900 px-4 py-4">
-            <form
-                @submit.prevent="handleSubmit"
-                class="mx-auto max-w-3xl relative"
-            >
-                <textarea
-                    v-model="form.message"
-                    class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-20 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
-                    :rows="1"
-                    placeholder="Posez votre question..."
-                    required
-                    @keydown.enter.exact.prevent="handleSubmit"
-                ></textarea>
-                <button
-                    type="submit"
-                    :disabled="isLoading || !form.message"
-                    class="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
-                >
-                    <span v-if="isLoading">...</span>
-                    <span v-else>Envoyer</span>
-                </button>
-            </form>
-        </div>
     </div>
+
+    <!-- Modal de confirmation de suppression -->
+    <DialogModal :show="confirmingDeletion" @close="closeDeleteModal">
+        <template #title> Supprimer la conversation </template>
+
+        <template #content>
+            Êtes-vous sûr de vouloir supprimer cette conversation ? Cette action
+            est irréversible.
+        </template>
+
+        <template #footer>
+            <SecondaryButton @click="closeDeleteModal">
+                Annuler
+            </SecondaryButton>
+
+            <DangerButton
+                class="ml-3"
+                :class="{ 'opacity-25': isDeleting }"
+                :disabled="isDeleting"
+                @click="deleteConversation"
+            >
+                Supprimer
+            </DangerButton>
+        </template>
+    </DialogModal>
 </template>
 
 <style scoped>

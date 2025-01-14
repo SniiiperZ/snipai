@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AskController;
+use App\Http\Controllers\ConversationController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -13,15 +14,13 @@ Route::get('/', function () {
         'phpVersion' => PHP_VERSION,
     ]);
 });
-
-Route::middleware([
-    'auth:sanctum',
-    config('jetstream.auth_session'),
-    'verified',
-])->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
+Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])->group(function () {
     Route::get('/ask', [AskController::class, 'index'])->name('ask.index');
-    Route::post('/ask', [AskController::class, 'ask'])->name('ask.post');
+    Route::post('/ask/{conversation}', [AskController::class, 'ask'])->name('ask');
+
+    Route::resource('conversations', ConversationController::class);
+    Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages'])
+        ->name('conversations.messages');
+    Route::post('/conversations/{conversation}/generate-title', [ConversationController::class, 'generateTitle'])
+        ->name('conversations.generate-title');
 });
