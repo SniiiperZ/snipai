@@ -7,6 +7,7 @@ import "highlight.js/styles/atom-one-dark.css"; // Thème
 import DialogModal from "@/Components/DialogModal.vue";
 import SecondaryButton from "@/Components/SecondaryButton.vue";
 import DangerButton from "@/Components/DangerButton.vue";
+import { Link } from "@inertiajs/vue3";
 
 // Props via Inertia
 const props = defineProps({
@@ -132,7 +133,8 @@ function handleSubmit() {
             model: form.model,
         },
         onSuccess: (response) => {
-            form.reset();
+            // Réinitialisation explicite du message
+            form.message = "";
 
             if (response?.props?.flash?.messages) {
                 conversationHistory.value = response.props.flash.messages;
@@ -358,12 +360,16 @@ const deleteConversation = () => {
                                     :title="
                                         conv.title || 'Nouvelle conversation'
                                     "
-                                >
-                                    {{ conv.title || "Nouvelle conversation" }}
-                                </p>
+                                    v-html="
+                                        renderMarkdown(
+                                            conv.title ||
+                                                'Nouvelle conversation'
+                                        )
+                                    "
+                                ></p>
                                 <button
                                     @click.stop="confirmDelete(conv)"
-                                    class="ml-2 p-1.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                     title="Supprimer la conversation"
                                 >
                                     <svg
@@ -397,10 +403,12 @@ const deleteConversation = () => {
             <header
                 class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900 backdrop-blur"
             >
-                <div class="mx-auto max-w-5xl px-4 py-3">
+                <div
+                    class="mx-auto max-w-5xl px-4 py-3 flex justify-between items-center"
+                >
                     <select
                         v-model="form.model"
-                        class="w-full max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
+                        class="max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
                         required
                     >
                         <option
@@ -416,6 +424,27 @@ const deleteConversation = () => {
                             {{ model.name }}
                         </option>
                     </select>
+
+                    <!-- Bouton Home -->
+                    <Link
+                        href="/dashboard"
+                        class="text-gray-400 hover:text-gray-200 transition-colors"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="h-6 w-6"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+                            />
+                        </svg>
+                    </Link>
                 </div>
             </header>
 
@@ -513,9 +542,7 @@ const deleteConversation = () => {
                 >
                     <textarea
                         v-model="form.message"
-                        :key="`textarea-${
-                            currentConversation?.id || 'new'
-                        }-${Date.now()}`"
+                        :key="`textarea-${currentConversation?.id || 'new'}`"
                         class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-20 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
                         :rows="1"
                         placeholder="Posez votre question..."

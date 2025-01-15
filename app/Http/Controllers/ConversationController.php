@@ -92,7 +92,7 @@ class ConversationController extends Controller
                 return response()->json(['title' => 'Nouvelle conversation']);
             }
 
-            $prompt = "Génère un titre court (max 6 mots) pour cette conversation. Question: {$messages[0]->content} Réponse: {$messages[1]->content}";
+            $prompt = "Génère un titre très court (max 3 mots) pour cette conversation en utilisant le markdown. Question: {$messages[0]->content} Réponse: {$messages[1]->content}";
 
             $title = (new ChatService())->sendMessage(
                 messages: [['role' => 'user', 'content' => $prompt]],

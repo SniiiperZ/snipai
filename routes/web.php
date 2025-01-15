@@ -18,6 +18,10 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('/ask', [AskController::class, 'index'])->name('ask.index');
     Route::post('/ask/{conversation}', [AskController::class, 'ask'])->name('ask');
 
+    Route::get('/dashboard', function () {
+        return Inertia::render('Dashboard');
+    })->name('dashboard');
+
     Route::resource('conversations', ConversationController::class);
     Route::get('/conversations/{conversation}/messages', [ConversationController::class, 'messages'])
         ->name('conversations.messages');
