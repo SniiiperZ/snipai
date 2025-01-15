@@ -66,6 +66,14 @@ const logout = () => {
                                 >
                                     Ask
                                 </NavLink>
+                                <NavLink
+                                    :href="route('instructions.index')"
+                                    :active="
+                                        route().current('instructions.index')
+                                    "
+                                >
+                                    Instructions
+                                </NavLink>
                             </div>
                         </div>
 
