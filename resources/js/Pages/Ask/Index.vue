@@ -326,9 +326,11 @@ const deleteConversation = () => {
 <template>
     <div class="flex h-screen">
         <!-- Sidebar -->
-        <div class="w-64 bg-gray-800 border-r border-gray-700">
+        <div
+            class="flex flex-col h-screen bg-gray-800 border-r border-gray-700"
+        >
             <!-- Nouveau bouton conversation -->
-            <div class="p-4">
+            <div class="p-4 border-b border-gray-700">
                 <button
                     @click="startNewConversation"
                     class="w-full px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
