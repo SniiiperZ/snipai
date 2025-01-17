@@ -80,6 +80,12 @@ const logout = () => {
                                 >
                                     Comportement de l'assistant
                                 </NavLink>
+                                <NavLink
+                                    :href="route('commands.index')"
+                                    :active="route().current('commands.index')"
+                                >
+                                    Commandes personnalisées
+                                </NavLink>
                             </div>
                         </div>
 

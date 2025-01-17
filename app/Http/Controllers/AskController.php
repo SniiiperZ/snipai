@@ -8,6 +8,7 @@ use Inertia\Inertia;
 use App\Models\Conversation;
 use App\Models\UserInstruction;
 use App\Models\AssistantBehavior;
+use App\Models\CustomCommand;
 
 class AskController extends Controller
 {
@@ -38,19 +39,26 @@ class AskController extends Controller
             $conversation = Conversation::findOrFail($conversationId);
             abort_if($conversation->user_id !== auth()->id(), 403);
 
-            // Récupérer les instructions et le comportement
+            // Récupérer les instructions, le comportement et les commandes
             $userInstructions = UserInstruction::where('user_id', auth()->id())->first();
             $userBehavior = AssistantBehavior::where('user_id', auth()->id())->first();
-            
-            // Créer un message système avec les instructions et le comportement
+            $userCommands = auth()->user()->customCommands()->get();
+
+            // Créer un message système avec les instructions, le comportement et les commandes
             $systemMessage = null;
-            if ($userInstructions || $userBehavior) {
+            if ($userInstructions || $userBehavior || $userCommands->count() > 0) {
                 $content = [];
                 if ($userInstructions) {
                     $content[] = "Information sur l'utilisateur : " . $userInstructions->content;
                 }
                 if ($userBehavior) {
                     $content[] = "Comportement souhaité : " . $userBehavior->behavior;
+                }
+                if ($userCommands->count() > 0) {
+                    $commandsList = $userCommands->map(function($cmd) {
+                        return "- {$cmd->command} : {$cmd->description} => {$cmd->action}";
+                    })->join("\n");
+                    $content[] = "Commandes personnalisées disponibles :\n" . $commandsList;
                 }
                 $systemMessage = [
                     'role' => 'system',

@@ -79,4 +79,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(AssistantBehavior::class);
     }
+
+    public function customCommands()
+    {
+        return $this->hasMany(CustomCommand::class);
+    }
 }
