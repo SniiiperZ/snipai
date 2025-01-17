@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AskController;
+use App\Http\Controllers\AssistantBehaviorController;
 use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\UserInstructionController;
 use Illuminate\Foundation\Application;
@@ -18,6 +19,9 @@ Route::get('/', function () {
 Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified'])->group(function () {
     Route::get('/ask', [AskController::class, 'index'])->name('ask.index');
     Route::post('/ask/{conversation}', [AskController::class, 'ask'])->name('ask');
+
+    Route::get('/behavior', [AssistantBehaviorController::class, 'index'])->name('behavior.index');
+    Route::post('/behavior', [AssistantBehaviorController::class, 'store'])->name('behavior.store');
 
     Route::get('/instructions', [UserInstructionController::class, 'index'])->name('instructions.index');
     Route::post('/instructions', [UserInstructionController::class, 'store'])->name('instructions.store');

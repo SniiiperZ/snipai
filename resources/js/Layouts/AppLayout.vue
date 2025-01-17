@@ -72,7 +72,13 @@ const logout = () => {
                                         route().current('instructions.index')
                                     "
                                 >
-                                    Instructions
+                                    Instructions personnalisées
+                                </NavLink>
+                                <NavLink
+                                    :href="route('behavior.index')"
+                                    :active="route().current('behavior.index')"
+                                >
+                                    Comportement de l'assistant
                                 </NavLink>
                             </div>
                         </div>

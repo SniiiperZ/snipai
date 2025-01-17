@@ -6,6 +6,8 @@ use App\Services\ChatService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Conversation;
+use App\Models\UserInstruction;
+use App\Models\AssistantBehavior;
 
 class AskController extends Controller
 {
@@ -36,22 +38,50 @@ class AskController extends Controller
             $conversation = Conversation::findOrFail($conversationId);
             abort_if($conversation->user_id !== auth()->id(), 403);
 
+            // Récupérer les instructions et le comportement
+            $userInstructions = UserInstruction::where('user_id', auth()->id())->first();
+            $userBehavior = AssistantBehavior::where('user_id', auth()->id())->first();
+            
+            // Créer un message système avec les instructions et le comportement
+            $systemMessage = null;
+            if ($userInstructions || $userBehavior) {
+                $content = [];
+                if ($userInstructions) {
+                    $content[] = "Information sur l'utilisateur : " . $userInstructions->content;
+                }
+                if ($userBehavior) {
+                    $content[] = "Comportement souhaité : " . $userBehavior->behavior;
+                }
+                $systemMessage = [
+                    'role' => 'system',
+                    'content' => implode("\n\n", $content)
+                ];
+            }
+
             // Sauvegarde le message utilisateur
             $conversation->messages()->create([
                 'role' => 'user',
                 'content' => $request->message,
             ]);
 
+            // Préparer les messages pour l'IA
+            $messages = $conversation->messages()
+                ->orderBy('created_at')
+                ->get()
+                ->map(fn($msg) => [
+                    'role' => $msg->role,
+                    'content' => $msg->content,
+                ])
+                ->toArray();
+
+            // Ajouter le message système au début s'il existe
+            if ($systemMessage) {
+                array_unshift($messages, $systemMessage);
+            }
+
             // Obtient la réponse de l'IA
             $response = (new ChatService())->sendMessage(
-                messages: $conversation->messages()
-                    ->orderBy('created_at')
-                    ->get()
-                    ->map(fn($msg) => [
-                        'role' => $msg->role,
-                        'content' => $msg->content,
-                    ])
-                    ->toArray(),
+                messages: $messages,
                 model: $request->model
             );
 

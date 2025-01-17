@@ -74,4 +74,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(UserInstruction::class);
     }
+
+    public function behavior()
+    {
+        return $this->hasOne(AssistantBehavior::class);
+    }
 }
