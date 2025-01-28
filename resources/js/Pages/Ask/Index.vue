@@ -341,86 +341,178 @@ const deleteConversation = () => {
         }
     );
 };
+
+const sidebarVisible = ref(true);
+
+// Ajout des refs pour la recherche
+const searchQuery = ref("");
+const isSearching = ref(false);
+
+// Fonction de recherche
+const handleSearch = () => {
+    isSearching.value = true;
+    // TODO: Implémenter la logique de recherche
+    console.log("Recherche:", searchQuery.value);
+};
 </script>
 
 <template>
     <div class="flex h-screen">
-        <!-- Sidebar -->
-        <div
-            class="flex flex-col h-screen bg-gray-800 border-r border-gray-700"
+        <!-- Sidebar avec transition -->
+        <transition
+            enter-active-class="transition-all duration-300 ease-in-out"
+            leave-active-class="transition-all duration-300 ease-in-out"
+            enter-from-class="-ml-64"
+            enter-to-class="ml-0"
+            leave-from-class="ml-0"
+            leave-to-class="-ml-64"
         >
-            <!-- Nouveau bouton conversation -->
-            <div class="p-4 border-b border-gray-700">
-                <button
-                    @click="startNewConversation"
-                    class="w-full px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
-                >
-                    Nouvelle conversation
-                </button>
-            </div>
-
-            <!-- Liste des conversations -->
-            <div class="overflow-y-auto">
+            <div
+                v-show="sidebarVisible"
+                class="flex flex-col h-screen bg-gray-800 border-r border-gray-700 w-64"
+            >
+                <!-- Div des boutons en haut de la sidebar -->
                 <div
-                    v-for="conv in conversations"
-                    :key="conv.id"
-                    class="p-4 cursor-pointer hover:bg-gray-700 relative group"
-                    :class="[
-                        currentConversation?.id === conv.id
-                            ? 'bg-gray-700'
-                            : '',
-                    ]"
+                    class="p-4 border-b border-gray-700 flex space-x-2 items-center"
                 >
-                    <div class="flex items-center justify-between">
-                        <div
-                            class="flex-1 min-w-0 mr-2"
-                            @click="selectConversation(conv)"
+                    <button
+                        @click="startNewConversation"
+                        class="flex-1 px-4 py-2 text-sm text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
+                    >
+                        Nouvelle conversation
+                    </button>
+
+                    <!-- Bouton de recherche -->
+                    <button
+                        @click="isSearching = !isSearching"
+                        class="px-3 py-2 text-gray-300 hover:text-white bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+                        title="Rechercher dans les conversations"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            class="h-5 w-5"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
                         >
-                            <div class="flex items-center">
-                                <p
-                                    class="text-sm text-gray-300 truncate hover:text-gray-100"
-                                    :title="
-                                        conv.title || 'Nouvelle conversation'
-                                    "
-                                    v-html="
-                                        renderMarkdown(
+                            <path
+                                fill-rule="evenodd"
+                                d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Barre de recherche (apparaît quand isSearching est true) -->
+                <div
+                    v-if="isSearching"
+                    class="px-4 py-2 border-b border-gray-700"
+                >
+                    <input
+                        v-model="searchQuery"
+                        type="text"
+                        class="w-full px-3 py-1.5 text-sm bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder-gray-400"
+                        placeholder="Rechercher..."
+                        @keyup.enter="handleSearch"
+                    />
+                </div>
+
+                <!-- Liste des conversations -->
+                <div class="overflow-y-auto">
+                    <div
+                        v-for="conv in conversations"
+                        :key="conv.id"
+                        class="p-4 cursor-pointer hover:bg-gray-700 relative group"
+                        :class="[
+                            currentConversation?.id === conv.id
+                                ? 'bg-gray-700'
+                                : '',
+                        ]"
+                    >
+                        <div class="flex items-center justify-between">
+                            <div
+                                class="flex-1 min-w-0 mr-2"
+                                @click="selectConversation(conv)"
+                            >
+                                <div class="flex items-center">
+                                    <p
+                                        class="text-sm text-gray-300 truncate hover:text-gray-100"
+                                        :title="
                                             conv.title ||
-                                                'Nouvelle conversation'
-                                        )
-                                    "
-                                ></p>
-                                <button
-                                    @click.stop="confirmDelete(conv)"
-                                    class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Supprimer la conversation"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="h-4 w-4"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
+                                            'Nouvelle conversation'
+                                        "
+                                        v-html="
+                                            renderMarkdown(
+                                                conv.title ||
+                                                    'Nouvelle conversation'
+                                            )
+                                        "
+                                    ></p>
+                                    <button
+                                        @click.stop="confirmDelete(conv)"
+                                        class="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Supprimer la conversation"
                                     >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2"
-                                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                        />
-                                    </svg>
-                                </button>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            class="h-4 w-4"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500">
+                                    {{ formatDate(conv.created_at) }}
+                                </p>
                             </div>
-                            <p class="text-xs text-gray-500">
-                                {{ formatDate(conv.created_at) }}
-                            </p>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </transition>
+
+        <!-- Bouton toggle -->
+        <button
+            @click="sidebarVisible = !sidebarVisible"
+            :class="[
+                'absolute top-1/2 transform -translate-y-1/2 z-50 p-2 bg-gray-800 text-gray-300 hover:text-white rounded-lg border border-gray-700 transition-all duration-300',
+                sidebarVisible ? 'left-64' : 'left-0',
+            ]"
+        >
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+            >
+                <path
+                    v-if="sidebarVisible"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                />
+                <path
+                    v-else
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                />
+            </svg>
+        </button>
 
         <!-- Zone principale -->
-        <div class="flex-1 flex flex-col">
+        <div class="flex-1 flex flex-col transition-all duration-300">
             <!-- En-tête -->
             <header
                 class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900 backdrop-blur"
