@@ -126,4 +126,33 @@ class ChatService
                 EOT,
         ];
     }
+
+    public function streamConversation(array $messages, string $model = null, float $temperature = 0.7)
+    {
+        try {
+            logger()->info('Début du streaming', ['messages' => $messages]);
+            
+            if (!$model) {
+                $model = self::DEFAULT_MODEL;
+            }
+
+            $messages = [$this->getChatSystemPrompt(), ...$messages];
+
+            $stream = $this->client->chat()->createStreamed([
+                'model' => $model,
+                'messages' => $messages,
+                'temperature' => $temperature,
+            ]);
+
+            logger()->info('Stream créé avec succès');
+            
+            return $stream;
+        } catch (\Exception $e) {
+            logger()->error('Erreur dans streamConversation:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+    }
 }

@@ -8,6 +8,7 @@ import DialogModal from "@/Components/DialogModal.vue";
 import SecondaryButton from "@/Components/SecondaryButton.vue";
 import DangerButton from "@/Components/DangerButton.vue";
 import { Link } from "@inertiajs/vue3";
+import axios from "axios";
 
 // Props via Inertia
 const props = defineProps({
@@ -29,13 +30,16 @@ const props = defineProps({
 });
 
 // Historique des conversations
-const conversationHistory = ref([]);
+const conversationHistory = ref(props.conversationHistory || []);
 
 // Élément où on scroll
 const messagesContainer = ref(null);
 
 // État de chargement
 const isLoading = ref(false);
+
+// État pour la souscription au canal
+const channelSubscription = ref(null);
 
 // Formulaire
 const form = useForm({
@@ -124,43 +128,59 @@ function handleSubmit() {
 
     const message = form.message;
     isLoading.value = true;
+    form.message = "";
 
-    form.post(route("ask", { conversation: currentConversation.value.id }), {
-        preserveScroll: true,
-        preserveState: true,
-        data: {
+    // Ajouter le message de l'utilisateur immédiatement
+    conversationHistory.value.push({
+        question: message,
+        answer: "",
+        isLoading: true,
+    });
+
+    // S'abonner au canal avant d'envoyer le message
+    const channel = `private-chat.${currentConversation.value.id}`;
+
+    if (window.Echo) {
+        if (channelSubscription.value) {
+            window.Echo.leave(channel);
+        }
+
+        channelSubscription.value = window.Echo.private(channel).listen(
+            ".ChatMessageStreamed",
+            (e) => {
+                const lastMessage =
+                    conversationHistory.value[
+                        conversationHistory.value.length - 1
+                    ];
+
+                if (e.error) {
+                    isLoading.value = false;
+                    lastMessage.answer = "Erreur: " + e.content;
+                    return;
+                }
+
+                lastMessage.isLoading = false;
+                lastMessage.answer += e.content;
+                nextTick(() => scrollToBottom());
+
+                if (e.isComplete) {
+                    isLoading.value = false;
+                }
+            }
+        );
+    }
+
+    // Envoyer la requête
+    axios
+        .post(route("ask.stream", currentConversation.value.id), {
             message: message,
             model: form.model,
-        },
-        onSuccess: (response) => {
-            // Réinitialisation explicite du message
-            form.message = "";
-
-            if (response?.props?.flash?.messages) {
-                conversationHistory.value = response.props.flash.messages;
-            }
-
-            if (response?.props?.flash?.currentConversation) {
-                currentConversation.value =
-                    response.props.flash.currentConversation;
-            }
-
-            nextTick(() => {
-                scrollToBottom();
-                isLoading.value = false;
-
-                if (
-                    !currentConversation.value?.title ||
-                    currentConversation.value.title === "Nouvelle conversation"
-                ) {
-                    generateTitle();
-                }
-            });
-        },
-        onError: () => {
+        })
+        .catch((error) => {
             isLoading.value = false;
-        },
-    });
+            console.error(error);
+            conversationHistory.value.pop();
+        });
 }
 
 // Scroll auto
@@ -473,7 +493,7 @@ const deleteConversation = () => {
                                 <div class="prose prose-invert max-w-none">
                                     <p>
                                         Coucou ! Je suis ton IA. Que puis-je
-                                        faire pour toi aujourd’hui ?
+                                        faire pour toi aujourd'hui ?
                                     </p>
                                 </div>
                             </div>

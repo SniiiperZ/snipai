@@ -21,6 +21,9 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
     Route::get('/ask', [AskController::class, 'index'])->name('ask.index');
     Route::post('/ask/{conversation}', [AskController::class, 'ask'])->name('ask');
 
+    Route::post('/ask/{conversation}/stream', [AskController::class, 'streamMessage'])
+        ->name('ask.stream');
+
     Route::get('/commands', [CustomCommandController::class, 'index'])->name('commands.index');
     Route::post('/commands', [CustomCommandController::class, 'store'])->name('commands.store');
     Route::delete('/commands/{command}', [CustomCommandController::class, 'destroy'])->name('commands.destroy');
@@ -30,7 +33,7 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
 
     Route::get('/instructions', [UserInstructionController::class, 'index'])->name('instructions.index');
     Route::post('/instructions', [UserInstructionController::class, 'store'])->name('instructions.store');
-    
+
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
@@ -40,4 +43,6 @@ Route::middleware(['auth:sanctum', config('jetstream.auth_session'), 'verified']
         ->name('conversations.messages');
     Route::post('/conversations/{conversation}/generate-title', [ConversationController::class, 'generateTitle'])
         ->name('conversations.generate-title');
+
+    Route::post('/conversations/{conversation}/stream', [AskController::class, 'streamMessage'])->name('ask.stream');
 });
