@@ -137,6 +137,11 @@ function handleSubmit() {
         isLoading: true,
     });
 
+    // Scroll immédiatement après l'ajout du message
+    nextTick(() => {
+        scrollToBottom();
+    });
+
     // S'abonner au canal avant d'envoyer le message
     const channel = `private-chat.${currentConversation.value.id}`;
 
@@ -165,6 +170,10 @@ function handleSubmit() {
 
                 if (e.isComplete) {
                     isLoading.value = false;
+                    // Générer le titre si c'est la première réponse de la conversation
+                    if (conversationHistory.value.length === 1) {
+                        generateTitle();
+                    }
                 }
             }
         );
@@ -185,16 +194,10 @@ function handleSubmit() {
 
 // Scroll auto
 function scrollToBottom() {
-    nextTick(() => {
-        setTimeout(() => {
-            if (messagesContainer.value) {
-                messagesContainer.value.scrollTo({
-                    top: messagesContainer.value.scrollHeight,
-                    behavior: "smooth",
-                });
-            }
-        }, 100); // Un petit délai pour s'assurer que le contenu est rendu
-    });
+    if (messagesContainer.value) {
+        messagesContainer.value.scrollTop =
+            messagesContainer.value.scrollHeight;
+    }
 }
 
 const filteredModels = computed(() => {
@@ -348,11 +351,27 @@ const sidebarVisible = ref(true);
 const searchQuery = ref("");
 const isSearching = ref(false);
 
-// Fonction de recherche
+// Modifiez la fonction handleSearch et ajoutez filteredConversations
+const filteredConversations = computed(() => {
+    if (!searchQuery.value) return conversations.value;
+
+    const query = searchQuery.value.toLowerCase();
+    return conversations.value.filter((conv) => {
+        const title = (conv.title || "Nouvelle conversation").toLowerCase();
+        const messages = conv.messages
+            ? conv.messages
+                  .map((m) => (m.question + " " + m.answer).toLowerCase())
+                  .join(" ")
+            : "";
+
+        return title.includes(query) || messages.includes(query);
+    });
+});
+
+// Remplacez la fonction handleSearch existante
 const handleSearch = () => {
     isSearching.value = true;
-    // TODO: Implémenter la logique de recherche
-    console.log("Recherche:", searchQuery.value);
+    // La recherche est maintenant gérée par le computed filteredConversations
 };
 </script>
 
@@ -420,7 +439,7 @@ const handleSearch = () => {
                 <!-- Liste des conversations -->
                 <div class="overflow-y-auto">
                     <div
-                        v-for="conv in conversations"
+                        v-for="conv in filteredConversations"
                         :key="conv.id"
                         class="p-4 cursor-pointer hover:bg-gray-700 relative group"
                         :class="[
@@ -610,7 +629,7 @@ const handleSearch = () => {
                             <div class="flex-1 space-y-2">
                                 <div class="flex justify-end">
                                     <p
-                                        class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%]"
+                                        class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] break-words whitespace-pre-wrap"
                                     >
                                         {{ conversation.question }}
                                     </p>
@@ -632,7 +651,9 @@ const handleSearch = () => {
                                 <div
                                     class="bg-gray-900 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
                                 >
-                                    <div class="prose prose-invert max-w-none">
+                                    <div
+                                        class="prose prose-invert max-w-none break-words whitespace-pre-wrap"
+                                    >
                                         <div
                                             v-html="
                                                 renderMarkdown(

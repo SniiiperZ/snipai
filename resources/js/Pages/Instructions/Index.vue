@@ -30,15 +30,15 @@ const saveInstructions = () => {
 <template>
     <AppLayout title="Instructions Personnalisées">
         <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+            <h2 class="font-semibold text-xl text-gray-200 leading-tight">
                 Instructions Personnalisées
             </h2>
         </template>
 
-        <div class="py-12">
+        <div class="bg-gray-900 py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div
-                    class="bg-white dark:bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6"
+                    class="bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6"
                 >
                     <div class="space-y-6">
                         <!-- Section À propos de vous -->
