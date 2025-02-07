@@ -16,6 +16,7 @@ const form = useForm({
 
 const saving = ref(false);
 const editing = ref(false);
+const status = ref(""); // Message de confirmation ou d'erreur
 
 const saveCommand = () => {
     saving.value = true;
@@ -24,9 +25,13 @@ const saveCommand = () => {
         onSuccess: () => {
             saving.value = false;
             resetForm();
+            status.value = "Confirmation des modifications apportées.";
+            setTimeout(() => (status.value = ""), 3000);
         },
         onError: () => {
             saving.value = false;
+            status.value = "Échec des modifications.";
+            setTimeout(() => (status.value = ""), 3000);
         },
     });
 };
@@ -62,7 +67,6 @@ const deleteCommand = (id) => {
             </h2>
         </template>
 
-        <!-- Ajout de "min-h-screen" ici -->
         <div class="min-h-screen bg-gray-900 py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div
@@ -82,6 +86,7 @@ const deleteCommand = (id) => {
                             </h3>
 
                             <div class="mt-6 space-y-4">
+                                <!-- Champs du formulaire -->
                                 <div>
                                     <label
                                         class="block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -95,7 +100,6 @@ const deleteCommand = (id) => {
                                         placeholder="/exemple"
                                     />
                                 </div>
-
                                 <div>
                                     <label
                                         class="block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -109,7 +113,6 @@ const deleteCommand = (id) => {
                                         placeholder="Description de la commande"
                                     />
                                 </div>
-
                                 <div>
                                     <label
                                         class="block text-sm font-medium text-gray-700 dark:text-gray-300"
@@ -145,6 +148,11 @@ const deleteCommand = (id) => {
                                                 : "Ajouter"
                                         }}
                                     </button>
+                                </div>
+
+                                <!-- Message de confirmation/erreur -->
+                                <div v-if="status" class="mt-4 text-green-500">
+                                    {{ status }}
                                 </div>
                             </div>
                         </div>
@@ -202,6 +210,7 @@ const deleteCommand = (id) => {
                                 </div>
                             </div>
                         </div>
+                        <!-- Fin de la liste -->
                     </div>
                 </div>
             </div>

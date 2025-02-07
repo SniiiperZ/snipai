@@ -12,6 +12,7 @@ const form = useForm({
 });
 
 const saving = ref(false);
+const feedback = ref(""); // variable pour le message de feedback
 
 const saveBehavior = () => {
     saving.value = true;
@@ -19,9 +20,11 @@ const saveBehavior = () => {
         preserveScroll: true,
         onSuccess: () => {
             saving.value = false;
+            feedback.value = "Confirmation des modifications apportées";
         },
         onError: () => {
             saving.value = false;
+            feedback.value = "Échec lors de la mise à jour";
         },
     });
 };
@@ -54,7 +57,6 @@ const saveBehavior = () => {
                                 l'assistant interagisse avec vous, incluant le
                                 ton, le format et le style d'explication.
                             </p>
-
                             <div class="mt-6">
                                 <textarea
                                     v-model="form.behavior"
@@ -103,6 +105,11 @@ const saveBehavior = () => {
                                     saving ? "Enregistrement..." : "Enregistrer"
                                 }}
                             </button>
+                        </div>
+
+                        <!-- Message de feedback -->
+                        <div v-if="feedback" class="mt-4 text-green-500">
+                            {{ feedback }}
                         </div>
                     </div>
                 </div>

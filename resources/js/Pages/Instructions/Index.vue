@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useForm } from "@inertiajs/vue3";
 import AppLayout from "@/Layouts/AppLayout.vue";
+import ActionMessage from "@/Components/ActionMessage.vue"; // Référence
 
 const props = defineProps({
     instructions: Object,
@@ -12,6 +13,7 @@ const form = useForm({
 });
 
 const saving = ref(false);
+const status = ref("");
 
 const saveInstructions = () => {
     saving.value = true;
@@ -19,9 +21,13 @@ const saveInstructions = () => {
         preserveScroll: true,
         onSuccess: () => {
             saving.value = false;
+            status.value = "Les modifications ont bien été enregistrées.";
+            setTimeout(() => (status.value = ""), 3000);
         },
         onError: () => {
             saving.value = false;
+            status.value = "Échec lors de l'enregistrement.";
+            setTimeout(() => (status.value = ""), 3000);
         },
     });
 };
@@ -55,7 +61,6 @@ const saveInstructions = () => {
                                 l'assistant sur qui vous êtes, vos intérêts, et
                                 votre domaine d'expertise.
                             </p>
-
                             <div class="mt-6">
                                 <textarea
                                     v-model="form.content"
@@ -89,6 +94,15 @@ const saveInstructions = () => {
                             </div>
                         </div>
 
+                        <!-- Message de confirmation -->
+                        <ActionMessage
+                            :on="!!status"
+                            class="mt-4 text-green-500"
+                        >
+                            {{ status }}
+                        </ActionMessage>
+
+                        <!-- Bouton d'enregistrement -->
                         <div class="mt-6 flex justify-end">
                             <button
                                 @click="saveInstructions"
