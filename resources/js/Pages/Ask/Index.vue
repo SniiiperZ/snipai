@@ -203,13 +203,13 @@ function scrollToBottom() {
 const filteredModels = computed(() => {
     return props.models.filter(
         (model) =>
-            model.name !== "meta-llama/llama-3.2-11b-vision-instruct:free"
+            model.name !== "meta-llama/llama-3.2-90b-vision-instruct:free"
     );
 });
 
 onMounted(() => {
     if (!form.model) {
-        form.model = "meta-llama/llama-3.2-11b-vision-instruct:free";
+        form.model = "meta-llama/llama-3.2-90b-vision-instruct:free";
     }
     // Gérer le clic global pour copier
     document.addEventListener("click", (event) => {

@@ -62,7 +62,8 @@ const deleteCommand = (id) => {
             </h2>
         </template>
 
-        <div class="bg-gray-900 py-6">
+        <!-- Ajout de "min-h-screen" ici -->
+        <div class="min-h-screen bg-gray-900 py-6">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div
                     class="bg-gray-800 overflow-hidden shadow-xl sm:rounded-lg p-6"

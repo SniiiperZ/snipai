@@ -45,7 +45,7 @@ const logout = () => {
                         <div class="flex">
                             <!-- Logo -->
                             <div class="shrink-0 flex items-center">
-                                <Link :href="route('dashboard')">
+                                <Link :href="'/'">
                                     <ApplicationMark class="block h-9 w-auto" />
                                 </Link>
                             </div>
@@ -64,7 +64,7 @@ const logout = () => {
                                     :href="route('ask.index')"
                                     :active="route().current('ask.index')"
                                 >
-                                    Ask
+                                    SnipAI
                                 </NavLink>
                                 <NavLink
                                     :href="route('instructions.index')"
@@ -285,13 +285,13 @@ const logout = () => {
                                         <div
                                             class="block px-4 py-2 text-xs text-gray-400"
                                         >
-                                            Manage Account
+                                            Gérer le compte
                                         </div>
 
                                         <DropdownLink
                                             :href="route('profile.show')"
                                         >
-                                            Profile
+                                            Profil
                                         </DropdownLink>
 
                                         <DropdownLink
@@ -309,7 +309,7 @@ const logout = () => {
                                         <!-- Authentication -->
                                         <form @submit.prevent="logout">
                                             <DropdownLink as="button">
-                                                Log Out
+                                                Se déconnecter
                                             </DropdownLink>
                                         </form>
                                     </template>
