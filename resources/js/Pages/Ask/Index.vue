@@ -678,7 +678,7 @@ const handleSearch = () => {
                     <textarea
                         v-model="form.message"
                         :key="`textarea-${currentConversation?.id || 'new'}`"
-                        class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-20 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
+                        class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-24 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
                         :rows="1"
                         placeholder="Posez votre question..."
                         required

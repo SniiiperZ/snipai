@@ -62,7 +62,7 @@ class ConversationController extends Controller
     public function messages(Conversation $conversation)
     {
         abort_if($conversation->user_id !== auth()->id(), 403);
-        
+
         return response()->json(
             $conversation->messages()
                 ->orderBy('created_at')
@@ -83,27 +83,37 @@ class ConversationController extends Controller
         abort_if($conversation->user_id !== auth()->id(), 403);
 
         try {
+            // On ne récupère que les messages utiles (user et assistant)
             $messages = $conversation->messages()
+                ->whereIn('role', ['user', 'assistant'])
                 ->orderBy('created_at')
                 ->limit(2)
                 ->get();
 
             if ($messages->count() < 2) {
-                return response()->json(['title' => 'Nouvelle conversation']);
+                return response()->json(['title' => $conversation->title ?: 'Nouvelle conversation']);
             }
 
-            $prompt = "Génère un titre très court (max 3 mots) pour cette conversation en utilisant le markdown. Question: {$messages[0]->content} Réponse: {$messages[1]->content}";
+            // Demander un titre très court, maximum 5 mots, et sans markdown/backticks
+            $prompt = "Génère un titre très court, maximum 5 mots, sans aucun formatage (ni markdown ni backticks) pour cette conversation. Question: {$messages[0]->content} Réponse: {$messages[1]->content}";
 
-            $title = (new ChatService())->sendMessage(
+            $title = (new \App\Services\ChatService())->sendMessage(
                 messages: [['role' => 'user', 'content' => $prompt]],
                 model: $conversation->model
             );
+
+            // Suppression d'éventuels tags HTML et nettoyage du résultat
+            $title = strip_tags($title);
+            $titleWords = preg_split('/\s+/', trim($title));
+            if (count($titleWords) > 5) {
+                $title = implode(' ', array_slice($titleWords, 0, 5));
+            }
 
             $conversation->update(['title' => $title]);
 
             return response()->json(['title' => $title]);
         } catch (\Exception $e) {
-            return response()->json(['title' => 'Nouvelle conversation']);
+            return response()->json(['title' => $conversation->title ?: 'Nouvelle conversation']);
         }
     }
 

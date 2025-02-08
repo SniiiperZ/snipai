@@ -61,7 +61,7 @@ class ChatService
      *
      * @return string
      */
-    public function sendMessage(array $messages, string $model = null, float $temperature = 0.7): string
+    public function sendMessage(array $messages, string $model = null, float $temperature = 0.5): string
     {
         try {
             logger()->info('Envoi du message', [
@@ -127,11 +127,11 @@ class ChatService
         ];
     }
 
-    public function streamConversation(array $messages, string $model = null, float $temperature = 0.7)
+    public function streamConversation(array $messages, string $model = null, float $temperature = 0.5)
     {
         try {
             logger()->info('Début du streaming', ['messages' => $messages]);
-            
+
             if (!$model) {
                 $model = self::DEFAULT_MODEL;
             }
@@ -145,7 +145,7 @@ class ChatService
             ]);
 
             logger()->info('Stream créé avec succès');
-            
+
             return $stream;
         } catch (\Exception $e) {
             logger()->error('Erreur dans streamConversation:', [
