@@ -2,234 +2,279 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ChatService;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Events\ChatMessageStreamed;
 use App\Models\Conversation;
 use App\Models\UserInstruction;
 use App\Models\AssistantBehavior;
 use App\Models\CustomCommand;
-use App\Events\ChatMessageStreamed;
+use App\Services\ChatService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AskController extends Controller
 {
-    public function index()
+    protected $chatService;
+
+    public function __construct(ChatService $chatService)
     {
-        $models = (new ChatService())->getModels();
+        $this->chatService = $chatService;
+    }
+
+    /**
+     * Affiche la page principale de chat
+     */
+    public function index(): Response
+    {
+        Log::info('Accès à la page de chat', ['user_id' => auth()->id()]);
+
+        $models = $this->chatService->getModels();
         $selectedModel = ChatService::DEFAULT_MODEL;
 
         return Inertia::render('Ask/Index', [
             'models' => $models,
             'selectedModel' => $selectedModel,
-            'conversations' => auth()->user()->conversations()
-                ->orderBy('created_at', 'desc')
-                ->get(),
+            'conversations' => $this->getUserConversations(),
             'currentConversation' => null,
             'conversationHistory' => []
         ]);
     }
 
+    /**
+     * Traite une demande de chat non streamée
+     */
     public function ask(Request $request, $conversationId)
     {
-        $request->validate([
-            'message' => 'required|string',
-            'model' => 'required|string',
-        ]);
+        $this->validateRequest($request);
 
         try {
-            $conversation = Conversation::findOrFail($conversationId);
-            abort_if($conversation->user_id !== auth()->id(), 403);
-
-            // Récupérer les instructions, le comportement et les commandes
-            $userInstructions = UserInstruction::where('user_id', auth()->id())->first();
-            $userBehavior = AssistantBehavior::where('user_id', auth()->id())->first();
-            $userCommands = auth()->user()->customCommands()->get();
-
-            // Créer un message système avec les instructions, le comportement et les commandes
-            $systemMessage = null;
-            if ($userInstructions || $userBehavior || $userCommands->count() > 0) {
-                $content = [];
-                if ($userInstructions) {
-                    $content[] = "Information sur l'utilisateur : " . $userInstructions->content;
-                }
-                if ($userBehavior) {
-                    $content[] = "Comportement souhaité : " . $userBehavior->behavior;
-                }
-                if ($userCommands->count() > 0) {
-                    $commandsList = $userCommands->map(function ($cmd) {
-                        return "- {$cmd->command} : {$cmd->description} => {$cmd->action}";
-                    })->join("\n");
-                    $content[] = "Commandes personnalisées disponibles :\n" . $commandsList;
-                }
-                $systemMessage = [
-                    'role' => 'system',
-                    'content' => implode("\n\n", $content)
-                ];
-            }
-
-            // Sauvegarde le message utilisateur
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => $request->message,
+            Log::info('Nouvelle demande de chat', [
+                'user_id' => auth()->id(),
+                'conversation_id' => $conversationId
             ]);
 
-            // Préparer les messages pour l'IA
-            $messages = $conversation->messages()
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn($msg) => [
-                    'role' => $msg->role,
-                    'content' => $msg->content,
-                ])
-                ->toArray();
+            $conversation = $this->getAndVerifyConversation($conversationId);
+            $systemMessage = $this->buildSystemMessage();
 
-            // Ajouter le message système au début s'il existe
-            if ($systemMessage) {
-                array_unshift($messages, $systemMessage);
-            }
+            // Sauvegarde le message utilisateur
+            $this->saveUserMessage($conversation, $request->message);
 
-            // Obtient la réponse de l'IA
-            $response = (new ChatService())->sendMessage(
+            // Prépare et envoie les messages
+            $messages = $this->prepareMessages($conversation, $systemMessage);
+            $response = $this->chatService->sendMessage(
                 messages: $messages,
                 model: $request->model
             );
 
             // Sauvegarde la réponse
-            $conversation->messages()->create([
-                'role' => 'assistant',
-                'content' => $response,
+            $this->saveAssistantMessage($conversation, $response);
+
+            Log::info('Réponse générée avec succès', [
+                'conversation_id' => $conversationId
             ]);
 
-            // Récupérer les messages mis à jour
-            $messages = $conversation->messages()
-                ->orderBy('created_at')
-                ->get()
-                ->map(function ($message) {
-                    return [
-                        'question' => $message->role === 'user' ? $message->content : null,
-                        'answer' => $message->role === 'assistant' ? $message->content : null,
-                    ];
-                })
-                ->filter()
-                ->values();
-
             return back()->with([
-                'messages' => $messages,
+                'messages' => $this->formatConversationMessages($conversation),
                 'currentConversation' => $conversation
             ]);
         } catch (\Exception $e) {
+            Log::error('Erreur lors du traitement de la demande', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
 
+    /**
+     * Traite une demande de chat en streaming
+     */
     public function streamMessage(Conversation $conversation, Request $request)
+    {
+        $this->validateRequest($request);
+
+        try {
+            Log::info('Début du streaming', [
+                'conversation_id' => $conversation->id,
+                'user_id' => auth()->id()
+            ]);
+
+            abort_if($conversation->user_id !== auth()->id(), 403);
+
+            $systemMessage = $this->buildSystemMessage();
+            $this->saveUserMessage($conversation, $request->message);
+            $messages = $this->prepareMessages($conversation, $systemMessage);
+
+            return $this->handleStreamResponse($conversation, $messages, $request->model);
+        } catch (\Exception $e) {
+            Log::error('Erreur lors du streaming', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'conversation_id' => $conversation->id
+            ]);
+
+            $channelName = "private-chat.{$conversation->id}";
+            $this->broadcastError($channelName, $e->getMessage());
+
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Méthodes privées utilitaires
+     */
+    private function validateRequest(Request $request): void
     {
         $request->validate([
             'message' => 'required|string',
             'model' => 'required|string',
         ]);
+    }
 
+    private function getUserConversations()
+    {
+        return auth()->user()->conversations()
+            ->orderBy('created_at', 'desc')
+            ->get();
+    }
+
+    private function getAndVerifyConversation($conversationId): Conversation
+    {
+        $conversation = Conversation::findOrFail($conversationId);
         abort_if($conversation->user_id !== auth()->id(), 403);
+        return $conversation;
+    }
 
-        try {
-            // Récupérer les instructions personnalisées comme dans la méthode ask
-            $userInstructions = UserInstruction::where('user_id', auth()->id())->first();
-            $userBehavior = AssistantBehavior::where('user_id', auth()->id())->first();
-            $userCommands = auth()->user()->customCommands()->get();
+    private function buildSystemMessage(): ?array
+    {
+        $userInstructions = UserInstruction::where('user_id', auth()->id())->first();
+        $userBehavior = AssistantBehavior::where('user_id', auth()->id())->first();
+        $userCommands = auth()->user()->customCommands()->get();
 
-            // Créer le message système
-            $systemMessage = null;
-            if ($userInstructions || $userBehavior || $userCommands->count() > 0) {
-                $content = [];
-                if ($userInstructions) {
-                    $content[] = "Information sur l'utilisateur : " . $userInstructions->content;
-                }
-                if ($userBehavior) {
-                    $content[] = "Comportement souhaité : " . $userBehavior->behavior;
-                }
-                if ($userCommands->count() > 0) {
-                    $commandsList = $userCommands->map(function ($cmd) {
-                        return "- {$cmd->command} : {$cmd->description} => {$cmd->action}";
-                    })->join("\n");
-                    $content[] = "Commandes personnalisées disponibles :\n" . $commandsList;
-                }
-                $systemMessage = [
-                    'role' => 'system',
-                    'content' => implode("\n\n", $content)
-                ];
-            }
-
-            // Sauvegarder le message utilisateur
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => $request->message,
-            ]);
-
-            // Récupérer tous les messages
-            $messages = $conversation->messages()
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn($msg) => [
-                    'role' => $msg->role,
-                    'content' => $msg->content,
-                ])
-                ->toArray();
-
-            // Ajouter le message système au début s'il existe
-            if ($systemMessage) {
-                array_unshift($messages, $systemMessage);
-            }
-
-            // Obtenir le stream
-            $stream = app(ChatService::class)->streamConversation(
-                messages: $messages,
-                model: $request->model
-            );
-
-            // Initialiser la réponse
-            $fullResponse = '';
-            $channelName = "private-chat.{$conversation->id}";
-
-            // Traiter le stream
-            foreach ($stream as $response) {
-                $content = $response->choices[0]->delta->content ?? '';
-                $fullResponse .= $content;
-                
-                broadcast(new ChatMessageStreamed(
-                    channel: $channelName,
-                    content: $content,
-                    isComplete: false
-                ));
-            }
-
-            // Sauvegarder la réponse complète
-            $conversation->messages()->create([
-                'role' => 'assistant',
-                'content' => $fullResponse,
-            ]);
-
-            // Envoyer le signal de fin
-            broadcast(new ChatMessageStreamed(
-                channel: $channelName,
-                content: '',
-                isComplete: true
-            ));
-
-            return response()->noContent();
-        } catch (\Exception $e) {
-            logger()->error('Erreur dans streamMessage:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            broadcast(new ChatMessageStreamed(
-                channel: $channelName ?? "private-chat.{$conversation->id}",
-                content: "Erreur: " . $e->getMessage(),
-                isComplete: true,
-                error: true
-            ));
-
-            return response()->json(['error' => $e->getMessage()], 500);
+        if (!$userInstructions && !$userBehavior && $userCommands->isEmpty()) {
+            return null;
         }
+
+        $content = [];
+        if ($userInstructions) {
+            $content[] = "Information sur l'utilisateur : " . $userInstructions->content;
+        }
+        if ($userBehavior) {
+            $content[] = "Comportement souhaité : " . $userBehavior->behavior;
+        }
+        if ($userCommands->isNotEmpty()) {
+            $commandsList = $userCommands->map(function ($cmd) {
+                return "- {$cmd->command} : {$cmd->description} => {$cmd->action}";
+            })->join("\n");
+            $content[] = "Commandes personnalisées disponibles :\n" . $commandsList;
+        }
+
+        return [
+            'role' => 'system',
+            'content' => implode("\n\n", $content)
+        ];
+    }
+
+    private function prepareMessages(Conversation $conversation, ?array $systemMessage): array
+    {
+        $messages = $conversation->messages()
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn($msg) => [
+                'role' => $msg->role,
+                'content' => $msg->content,
+            ])
+            ->toArray();
+
+        if ($systemMessage) {
+            array_unshift($messages, $systemMessage);
+        }
+
+        return $messages;
+    }
+
+    private function saveUserMessage(Conversation $conversation, string $message): void
+    {
+        $conversation->messages()->create([
+            'role' => 'user',
+            'content' => $message,
+        ]);
+    }
+
+    private function saveAssistantMessage(Conversation $conversation, string $message): void
+    {
+        $conversation->messages()->create([
+            'role' => 'assistant',
+            'content' => $message,
+        ]);
+    }
+
+    private function formatConversationMessages(Conversation $conversation): array
+    {
+        return $conversation->messages()
+            ->orderBy('created_at')
+            ->get()
+            ->map(function ($message) {
+                return [
+                    'question' => $message->role === 'user' ? $message->content : null,
+                    'answer' => $message->role === 'assistant' ? $message->content : null,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->toArray();
+    }
+
+    private function handleStreamResponse(Conversation $conversation, array $messages, string $model)
+    {
+        $stream = $this->chatService->streamConversation(
+            messages: $messages,
+            model: $model
+        );
+
+        $fullResponse = '';
+        $channelName = "private-chat.{$conversation->id}";
+
+        foreach ($stream as $response) {
+            $content = $response->choices[0]->delta->content ?? '';
+            $fullResponse .= $content;
+
+            $this->broadcastMessage($channelName, $content);
+        }
+
+        $this->saveAssistantMessage($conversation, $fullResponse);
+        $this->broadcastCompletion($channelName);
+
+        return response()->noContent();
+    }
+
+    private function broadcastMessage(string $channel, string $content): void
+    {
+        broadcast(new ChatMessageStreamed(
+            channel: $channel,
+            content: $content,
+            isComplete: false
+        ));
+    }
+
+    private function broadcastCompletion(string $channel): void
+    {
+        broadcast(new ChatMessageStreamed(
+            channel: $channel,
+            content: '',
+            isComplete: true
+        ));
+    }
+
+    private function broadcastError(string $channel, string $error): void
+    {
+        broadcast(new ChatMessageStreamed(
+            channel: $channel,
+            content: "Erreur: " . $error,
+            isComplete: true,
+            error: true
+        ));
     }
 }

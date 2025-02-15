@@ -132,8 +132,10 @@ class ChatService
         try {
             logger()->info('Début du streaming', ['messages' => $messages]);
 
-            if (!$model) {
+            $models = collect($this->getModels());
+            if (!$model || !$models->contains('id', $model)) {
                 $model = self::DEFAULT_MODEL;
+                logger()->info('Modèle par défaut utilisé:', ['model' => $model]);
             }
 
             $messages = [$this->getChatSystemPrompt(), ...$messages];

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick, computed, onMounted } from "vue";
+import { ref, nextTick, computed, onMounted, watch } from "vue";
 import { useForm, router } from "@inertiajs/vue3";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
@@ -373,6 +373,30 @@ const handleSearch = () => {
     isSearching.value = true;
     // La recherche est maintenant gérée par le computed filteredConversations
 };
+
+// Fonction pour mettre à jour le modèle de la conversation
+async function updateConversationModel(newModel) {
+    if (!currentConversation.value) return;
+
+    try {
+        await axios.patch(
+            route("conversations.update-model", currentConversation.value.id),
+            { model: newModel }
+        );
+    } catch (error) {
+        console.error("Erreur lors de la mise à jour du modèle:", error);
+    }
+}
+
+// Modifier le watcher pour form.model
+watch(
+    () => form.model,
+    async (newModel) => {
+        if (currentConversation.value) {
+            await updateConversationModel(newModel);
+        }
+    }
+);
 </script>
 
 <template>
@@ -541,18 +565,14 @@ const handleSearch = () => {
                 >
                     <select
                         v-model="form.model"
+                        @change="updateConversationModel(form.model)"
                         class="max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
                         required
                     >
                         <option
-                            value="meta-llama/llama-3.2-11b-vision-instruct:free"
-                        >
-                            Llama 3.2 (Recommandé)
-                        </option>
-                        <option
                             v-for="model in filteredModels"
                             :key="model.id"
-                            :value="model.name"
+                            :value="model.id"
                         >
                             {{ model.name }}
                         </option>
