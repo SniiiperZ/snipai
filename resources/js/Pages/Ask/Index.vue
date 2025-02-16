@@ -248,15 +248,19 @@ function scrollToBottom() {
 }
 
 const filteredModels = computed(() => {
-    return props.models.filter(
-        (model) =>
-            model.name !== "meta-llama/llama-3.2-90b-vision-instruct:free"
-    );
+    // Retourner tous les modèles sans filtrage
+    return props.models.sort((a, b) => {
+        // Mettre en premier les modèles avec vision
+        if (a.supports_vision && !b.supports_vision) return -1;
+        if (!a.supports_vision && b.supports_vision) return 1;
+        // Ensuite trier par nom
+        return a.name.localeCompare(b.name);
+    });
 });
 
 onMounted(() => {
     if (!form.model) {
-        form.model = "meta-llama/llama-3.2-90b-vision-instruct:free";
+        form.model = ChatService.DEFAULT_MODEL; // Utiliser la constante du service
     }
     // Gérer le clic global pour copier
     document.addEventListener("click", (event) => {
@@ -638,7 +642,7 @@ onBeforeUnmount(() => {
                     <select
                         v-model="form.model"
                         @change="updateConversationModel(form.model)"
-                        class="max-w-xs rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
+                        class="max-w-s rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
                         required
                     >
                         <option

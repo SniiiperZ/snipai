@@ -9,7 +9,7 @@ class ChatService
     private $baseUrl;
     private $apiKey;
     private $client;
-    public const DEFAULT_MODEL = 'gpt-4-vision-preview';
+    public const DEFAULT_MODEL = 'meta-llama/llama-3.2-11b-vision-instruct:free';
 
     public function __construct()
     {
@@ -36,18 +36,14 @@ class ChatService
 
             return collect($response->json()['data'])
                 ->filter(function ($model) {
-                    // Inclure les modèles gratuits ET les modèles avec capacité vision
-                    return str_ends_with($model['id'], ':free') ||
-                        str_contains($model['id'], 'vision') ||
-                        str_contains($model['name'], 'vision');
+                    // Ne garder que les modèles gratuits
+                    return str_ends_with($model['id'], ':free');
                 })
                 ->sortBy('name')
                 ->map(function ($model) {
-                    // Ajouter un indicateur pour les modèles payants
-                    $isFree = str_ends_with($model['id'], ':free');
                     return [
                         'id' => $model['id'],
-                        'name' => $model['name'] . ($isFree ? ' (Gratuit)' : ' (Payant)'),
+                        'name' => $model['name'] . ' (Gratuit)',
                         'context_length' => $model['context_length'],
                         'max_completion_tokens' => $model['top_provider']['max_completion_tokens'],
                         'pricing' => $model['pricing'],
