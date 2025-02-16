@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('conversation_id')->constrained()->cascadeOnDelete();
             $table->enum('role', ['user', 'assistant']);
             $table->text('content');
+            $table->string('image_url')->nullable()->after('content');
             $table->timestamps();
         });
     }
