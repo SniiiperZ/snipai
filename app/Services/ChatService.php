@@ -9,7 +9,7 @@ class ChatService
     private $baseUrl;
     private $apiKey;
     private $client;
-    public const DEFAULT_MODEL = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+    public const DEFAULT_MODEL = 'gpt-4-vision-preview';
 
     public function __construct()
     {
@@ -36,21 +36,27 @@ class ChatService
 
             return collect($response->json()['data'])
                 ->filter(function ($model) {
-                    return str_ends_with($model['id'], ':free');
+                    // Inclure les modèles gratuits ET les modèles avec capacité vision
+                    return str_ends_with($model['id'], ':free') ||
+                        str_contains($model['id'], 'vision') ||
+                        str_contains($model['name'], 'vision');
                 })
                 ->sortBy('name')
                 ->map(function ($model) {
+                    // Ajouter un indicateur pour les modèles payants
+                    $isFree = str_ends_with($model['id'], ':free');
                     return [
                         'id' => $model['id'],
-                        'name' => $model['name'],
+                        'name' => $model['name'] . ($isFree ? ' (Gratuit)' : ' (Payant)'),
                         'context_length' => $model['context_length'],
                         'max_completion_tokens' => $model['top_provider']['max_completion_tokens'],
                         'pricing' => $model['pricing'],
+                        'supports_vision' => str_contains($model['id'], 'vision') ||
+                            str_contains($model['name'], 'vision'),
                     ];
                 })
                 ->values()
-                ->all()
-            ;
+                ->all();
         });
     }
 
@@ -64,29 +70,37 @@ class ChatService
     public function sendMessage(array $messages, string $model = null, float $temperature = 0.5): string
     {
         try {
-            logger()->info('Envoi du message', [
-                'model' => $model,
-                'temperature' => $temperature,
-            ]);
+            $formattedMessages = array_map(function ($message) {
+                if (isset($message['image_url']) && !empty($message['image_url'])) {
+                    return [
+                        'role' => $message['role'],
+                        'content' => [
+                            [
+                                'type' => 'text',
+                                'text' => $message['content']
+                            ],
+                            [
+                                'type' => 'image_url',
+                                'image_url' => [
+                                    'url' => $message['image_url']
+                                ]
+                            ]
+                        ]
+                    ];
+                }
+                return [
+                    'role' => $message['role'],
+                    'content' => $message['content']
+                ];
+            }, $messages);
 
-            $models = collect($this->getModels());
-            if (!$model || !$models->contains('id', $model)) {
-                $model = self::DEFAULT_MODEL;
-                logger()->info('Modèle par défaut utilisé:', ['model' => $model]);
-            }
-
-            $messages = [$this->getChatSystemPrompt(), ...$messages];
             $response = $this->client->chat()->create([
-                'model' => $model,
-                'messages' => $messages,
+                'model' => $model ?? self::DEFAULT_MODEL,
+                'messages' => $formattedMessages,
                 'temperature' => $temperature,
             ]);
 
-            logger()->info('Réponse reçue:', ['response' => $response]);
-
-            $content = $response->choices[0]->message->content;
-
-            return $content;
+            return $response->choices[0]->message->content;
         } catch (\Exception $e) {
             if ($e->getMessage() === 'Undefined array key "choices"') {
                 throw new \Exception("Limite de messages atteinte");
@@ -140,9 +154,34 @@ class ChatService
 
             $messages = [$this->getChatSystemPrompt(), ...$messages];
 
+            // Formatage des messages avec images
+            $formattedMessages = array_map(function ($message) {
+                if (isset($message['image_url']) && !empty($message['image_url'])) {
+                    return [
+                        'role' => $message['role'],
+                        'content' => [
+                            [
+                                'type' => 'text',
+                                'text' => $message['content']
+                            ],
+                            [
+                                'type' => 'image_url',
+                                'image_url' => [
+                                    'url' => $message['image_url']
+                                ]
+                            ]
+                        ]
+                    ];
+                }
+                return [
+                    'role' => $message['role'],
+                    'content' => $message['content']
+                ];
+            }, $messages);
+
             $stream = $this->client->chat()->createStreamed([
                 'model' => $model,
-                'messages' => $messages,
+                'messages' => $formattedMessages,
                 'temperature' => $temperature,
             ]);
 

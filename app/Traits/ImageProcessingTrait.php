@@ -27,6 +27,8 @@ trait ImageProcessingTrait
             throw new \Exception("Le fichier image n'existe pas : " . $image);
         }
 
+        logger()->info('Début du traitement de l\'image', ['path' => $image]);
+
         try {
             if (!isset($this->imageService)) {
                 throw new \Exception("ImageService n'a pas été injecté dans la classe utilisant ce Trait.");

@@ -12,14 +12,18 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Traits\ImageProcessingTrait;
 
 class AskController extends Controller
 {
+    use ImageProcessingTrait;
+
     protected $chatService;
 
     public function __construct(ChatService $chatService)
     {
         $this->chatService = $chatService;
+        $this->setImageService(new \App\Services\ImageService());
     }
 
     /**
@@ -46,7 +50,7 @@ class AskController extends Controller
      */
     public function ask(Request $request, $conversationId)
     {
-        $this->validateRequest($request);
+        $this->validateRequestWithImage($request);
 
         try {
             Log::info('Nouvelle demande de chat', [
@@ -57,8 +61,15 @@ class AskController extends Controller
             $conversation = $this->getAndVerifyConversation($conversationId);
             $systemMessage = $this->buildSystemMessage();
 
-            // Sauvegarde le message utilisateur
-            $this->saveUserMessage($conversation, $request->message);
+            // Traitement de l'image si présente
+            $imageData = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->path();
+                $imageData = $this->processImageInput($imagePath);
+            }
+
+            // Sauvegarde le message utilisateur avec l'image
+            $this->saveUserMessage($conversation, $request->message, $imageData);
 
             // Prépare et envoie les messages
             $messages = $this->prepareMessages($conversation, $systemMessage);
@@ -93,7 +104,7 @@ class AskController extends Controller
      */
     public function streamMessage(Conversation $conversation, Request $request)
     {
-        $this->validateRequest($request);
+        $this->validateRequestWithImage($request);
 
         try {
             Log::info('Début du streaming', [
@@ -103,8 +114,17 @@ class AskController extends Controller
 
             abort_if($conversation->user_id !== auth()->id(), 403);
 
+            // Traitement de l'image
+            $imageData = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->path();
+                $imageData = $this->processImageInput($imagePath);
+            }
+
+            // Sauvegarde du message utilisateur avec l'image
+            $this->saveUserMessage($conversation, $request->message, $imageData);
+
             $systemMessage = $this->buildSystemMessage();
-            $this->saveUserMessage($conversation, $request->message);
             $messages = $this->prepareMessages($conversation, $systemMessage);
 
             return $this->handleStreamResponse($conversation, $messages, $request->model);
@@ -130,6 +150,15 @@ class AskController extends Controller
         $request->validate([
             'message' => 'required|string',
             'model' => 'required|string',
+        ]);
+    }
+
+    private function validateRequestWithImage(Request $request): void
+    {
+        $request->validate([
+            'message' => 'required|string',
+            'model' => 'required|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:10240', // 10MB max
         ]);
     }
 
@@ -185,6 +214,7 @@ class AskController extends Controller
             ->map(fn($msg) => [
                 'role' => $msg->role,
                 'content' => $msg->content,
+                'image_url' => $msg->image_url, // Ajout de l'URL de l'image
             ])
             ->toArray();
 
@@ -195,11 +225,12 @@ class AskController extends Controller
         return $messages;
     }
 
-    private function saveUserMessage(Conversation $conversation, string $message): void
+    private function saveUserMessage(Conversation $conversation, string $message, ?string $imageUrl = null): void
     {
         $conversation->messages()->create([
             'role' => 'user',
             'content' => $message,
+            'image_url' => $imageUrl,
         ]);
     }
 
@@ -234,6 +265,7 @@ class AskController extends Controller
             model: $model
         );
 
+        // Modification ici : utilisez .= au lieu de +=
         $fullResponse = '';
         $channelName = "private-chat.{$conversation->id}";
 

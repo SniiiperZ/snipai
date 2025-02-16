@@ -214,6 +214,7 @@ class ConversationController extends Controller
                 return [
                     'question' => $message->role === 'user' ? $message->content : null,
                     'answer' => $message->role === 'assistant' ? $message->content : null,
+                    'image_url' => $message->image_url,
                 ];
             })
             ->filter()

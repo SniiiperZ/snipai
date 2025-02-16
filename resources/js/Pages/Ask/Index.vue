@@ -1,5 +1,12 @@
 <script setup>
-import { ref, nextTick, computed, onMounted, watch } from "vue";
+import {
+    ref,
+    nextTick,
+    computed,
+    onMounted,
+    watch,
+    onBeforeUnmount,
+} from "vue";
 import { useForm, router } from "@inertiajs/vue3";
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js";
@@ -9,6 +16,9 @@ import SecondaryButton from "@/Components/SecondaryButton.vue";
 import DangerButton from "@/Components/DangerButton.vue";
 import { Link } from "@inertiajs/vue3";
 import axios from "axios";
+
+// Dans la section <script setup> de Index.vue, ajoutez cette ligne au début
+const URL = window.URL || window.webkitURL;
 
 // Props via Inertia
 const props = defineProps({
@@ -117,9 +127,21 @@ const md = new MarkdownIt({
 // Rendu Markdown
 const renderMarkdown = (text) => md.render(text || "");
 
+// Ajout des refs pour la gestion des images
+const imageInput = ref(null);
+const selectedImage = ref(null);
+
+// Fonction pour gérer la sélection d'image
+const handleImageSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+        selectedImage.value = file;
+    }
+};
+
 // Soumission de question
 function handleSubmit() {
-    if (!form.message.trim()) return;
+    if (!form.message.trim() && !selectedImage.value) return;
 
     if (!currentConversation.value) {
         startNewConversation();
@@ -130,12 +152,36 @@ function handleSubmit() {
     isLoading.value = true;
     form.message = "";
 
+    // Création du FormData pour l'envoi multipart
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("model", form.model);
+    let imageUrl = null;
+    if (selectedImage.value) {
+        imageUrl = URL.createObjectURL(selectedImage.value);
+        formData.append("image", selectedImage.value);
+    }
+
     // Ajouter le message de l'utilisateur immédiatement
     conversationHistory.value.push({
         question: message,
         answer: "",
         isLoading: true,
+        imageUrl: imageUrl,
     });
+
+    // Réinitialiser l'image sélectionnée
+    selectedImage.value = null;
+    if (imageInput.value) {
+        imageInput.value.value = "";
+    }
+
+    // Nettoyer l'URL de l'image précédente
+    if (selectedImage.value) {
+        const oldImageUrl = URL.createObjectURL(selectedImage.value);
+        selectedImage.value = null;
+        setTimeout(() => URL.revokeObjectURL(oldImageUrl), 1000); // Délai pour s'assurer que l'image est affichée
+    }
 
     // Scroll immédiatement après l'ajout du message
     nextTick(() => {
@@ -181,9 +227,10 @@ function handleSubmit() {
 
     // Envoyer la requête
     axios
-        .post(route("ask.stream", currentConversation.value.id), {
-            message: message,
-            model: form.model,
+        .post(route("ask.stream", currentConversation.value.id), formData, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
         })
         .catch((error) => {
             isLoading.value = false;
@@ -255,7 +302,11 @@ async function loadMessages(conversationId) {
             route("conversations.messages", conversationId)
         );
         if (response.data) {
-            conversationHistory.value = response.data;
+            // Transformer les données pour inclure les URLs des images
+            conversationHistory.value = response.data.map((message) => ({
+                ...message,
+                imageUrl: message.image_url, // Ajouter l'URL de l'image aux données du message
+            }));
             await nextTick();
             await scrollToBottom();
         }
@@ -397,6 +448,27 @@ watch(
         }
     }
 );
+
+// Ajoutez cette fonction dans la section <script setup>
+function revokeObjectURL(url) {
+    if (url && url.startsWith("blob:")) {
+        URL.revokeObjectURL(url);
+    }
+}
+
+// Modifiez le watcher pour selectedImage
+watch(selectedImage, (newVal, oldVal) => {
+    if (oldVal) {
+        revokeObjectURL(URL.createObjectURL(oldVal));
+    }
+});
+
+// Ajoutez un hook onBeforeUnmount pour nettoyer
+onBeforeUnmount(() => {
+    if (selectedImage.value) {
+        revokeObjectURL(URL.createObjectURL(selectedImage.value));
+    }
+});
 </script>
 
 <template>
@@ -573,8 +645,14 @@ watch(
                             v-for="model in filteredModels"
                             :key="model.id"
                             :value="model.id"
+                            :class="{
+                                'text-emerald-400': model.supports_vision,
+                            }"
                         >
                             {{ model.name }}
+                            <span v-if="model.supports_vision" class="ml-1"
+                                >📷</span
+                            >
                         </option>
                     </select>
 
@@ -647,12 +725,21 @@ watch(
                                 <span class="text-white text-sm">U</span>
                             </div>
                             <div class="flex-1 space-y-2">
-                                <div class="flex justify-end">
+                                <div class="flex flex-col items-end">
+                                    <!-- Message texte -->
                                     <p
                                         class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] break-words whitespace-pre-wrap"
                                     >
                                         {{ conversation.question }}
                                     </p>
+
+                                    <!-- Image si présente -->
+                                    <img
+                                        v-if="conversation.imageUrl"
+                                        :src="conversation.imageUrl"
+                                        class="mt-2 max-w-[80%] max-h-64 rounded-lg object-contain"
+                                        alt="Image envoyée"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -695,44 +782,103 @@ watch(
                     @submit.prevent="handleSubmit"
                     class="mx-auto max-w-3xl relative"
                 >
-                    <textarea
-                        v-model="form.message"
-                        :key="`textarea-${currentConversation?.id || 'new'}`"
-                        class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-24 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
-                        :rows="1"
-                        placeholder="Posez votre question..."
-                        required
-                        @keydown.enter.exact.prevent="handleSubmit"
-                    ></textarea>
-                    <button
-                        type="submit"
-                        :disabled="isLoading || !form.message"
-                        class="absolute right-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                        <template v-if="isLoading">
+                    <div class="flex items-center gap-4">
+                        <!-- Input pour l'image -->
+                        <input
+                            ref="imageInput"
+                            type="file"
+                            accept="image/*"
+                            class="hidden"
+                            @change="handleImageSelect"
+                        />
+                        <button
+                            type="button"
+                            @click="$refs.imageInput.click()"
+                            class="p-2 text-gray-400 hover:text-gray-300"
+                        >
                             <svg
-                                class="animate-spin h-5 w-5 text-white"
-                                xmlns="http://www.w3.org/2000/svg"
+                                class="w-6 h-6"
                                 fill="none"
+                                stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
-                                <circle
-                                    class="opacity-25"
-                                    cx="12"
-                                    cy="12"
-                                    r="10"
-                                    stroke="currentColor"
-                                    stroke-width="4"
-                                ></circle>
                                 <path
-                                    class="opacity-75"
-                                    fill="currentColor"
-                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                ></path>
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                />
                             </svg>
-                        </template>
-                        <span v-else>Envoyer</span>
-                    </button>
+                        </button>
+
+                        <!-- Input pour le message -->
+                        <textarea
+                            v-model="form.message"
+                            :key="`textarea-${
+                                currentConversation?.id || 'new'
+                            }`"
+                            class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-24 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
+                            :rows="1"
+                            placeholder="Posez votre question..."
+                            required
+                            @keydown.enter.exact.prevent="handleSubmit"
+                        ></textarea>
+
+                        <!-- Bouton d'envoi -->
+                        <button
+                            type="submit"
+                            :disabled="
+                                isLoading ||
+                                (!form.message.trim() && !selectedImage)
+                            "
+                            class="p-2 text-gray-400 hover:text-gray-300"
+                        >
+                            <svg
+                                class="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Prévisualisation de l'image -->
+                    <div v-if="selectedImage" class="mt-2">
+                        <img
+                            :src="
+                                selectedImage
+                                    ? URL.createObjectURL(selectedImage)
+                                    : ''
+                            "
+                            class="max-h-32 rounded-lg"
+                            alt="Image sélectionnée"
+                        />
+                        <button
+                            @click="selectedImage = null"
+                            class="absolute top-2 right-2 text-gray-400 hover:text-gray-300"
+                        >
+                            <svg
+                                class="w-5 h-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M6 18L18 6M6 6l12 12"
+                                />
+                            </svg>
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
