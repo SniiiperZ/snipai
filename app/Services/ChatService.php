@@ -192,4 +192,33 @@ class ChatService
             throw $e;
         }
     }
+
+    private function estimateTokenCount(string $text): int
+    {
+        // Estimation simple: 1 token ≈ 4 caractères
+        return (int) ceil(mb_strlen($text) / 4);
+    }
+
+    public function isConversationFull(array $messages, string $model): bool
+    {
+        $models = collect($this->getModels());
+        $modelInfo = $models->firstWhere('id', $model);
+
+        if (!$modelInfo) {
+            return false;
+        }
+
+        $totalTokens = 0;
+        foreach ($messages as $message) {
+            $content = is_array($message['content'])
+                ? collect($message['content'])->pluck('text')->join(' ')
+                : $message['content'];
+            $totalTokens += $this->estimateTokenCount($content);
+        }
+
+        // Garde 20% de marge de sécurité
+        $maxTokens = (int) ($modelInfo['context_length'] * 0.8);
+
+        return $totalTokens >= $maxTokens;
+    }
 }

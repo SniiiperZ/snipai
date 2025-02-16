@@ -99,6 +99,20 @@ class AskController extends Controller
         }
     }
 
+    private function canAcceptNewMessage(Conversation $conversation, string $message): bool
+    {
+        $systemMessage = $this->buildSystemMessage();
+        $messages = $this->prepareMessages($conversation, $systemMessage);
+
+        // Ajoute le nouveau message pour la vérification
+        $messages[] = [
+            'role' => 'user',
+            'content' => $message
+        ];
+
+        return !$this->chatService->isConversationFull($messages, $conversation->model);
+    }
+
     /**
      * Traite une demande de chat en streaming
      */
@@ -107,6 +121,15 @@ class AskController extends Controller
         $this->validateRequestWithImage($request);
 
         try {
+            if (!$this->canAcceptNewMessage($conversation, $request->message)) {
+                Log::info('Conversation pleine', [
+                    'conversation_id' => $conversation->id,
+                    'user_id' => auth()->id()
+                ]);
+
+                throw new \Exception("Limite de contexte atteinte. Veuillez créer une nouvelle conversation.");
+            }
+
             Log::info('Début du streaming', [
                 'conversation_id' => $conversation->id,
                 'user_id' => auth()->id()

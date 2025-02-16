@@ -473,6 +473,21 @@ onBeforeUnmount(() => {
         revokeObjectURL(URL.createObjectURL(selectedImage.value));
     }
 });
+
+const isConversationFull = computed(() => {
+    if (!currentConversation.value || !conversationHistory.value) return false;
+
+    const model = filteredModels.value.find((m) => m.id === form.model);
+    if (!model) return false;
+
+    // Estimation simple des tokens
+    const totalChars = conversationHistory.value.reduce((sum, msg) => {
+        return sum + (msg.question?.length || 0) + (msg.answer?.length || 0);
+    }, 0);
+
+    const estimatedTokens = Math.ceil(totalChars / 4);
+    return estimatedTokens >= model.context_length * 0.8;
+});
 </script>
 
 <template>
@@ -794,10 +809,19 @@ onBeforeUnmount(() => {
                         une conversation existante pour commencer
                     </p>
                 </div>
+                <div
+                    v-if="isConversationFull"
+                    class="mx-auto max-w-3xl mb-4 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg text-yellow-200"
+                >
+                    <p class="text-sm">
+                        Cette conversation approche de sa limite de contexte.
+                        Veuillez créer une nouvelle conversation pour continuer.
+                    </p>
+                </div>
 
                 <!-- Formulaire masqué/désactivé si pas de conversation active -->
                 <form
-                    v-else
+                    v-else-if="currentConversation"
                     @submit.prevent="handleSubmit"
                     class="mx-auto max-w-3xl relative"
                 >
