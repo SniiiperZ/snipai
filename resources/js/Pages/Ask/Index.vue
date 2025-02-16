@@ -701,8 +701,10 @@ onBeforeUnmount(() => {
                             >
                                 <div class="prose prose-invert max-w-none">
                                     <p>
-                                        Coucou ! Je suis ton IA. Que puis-je
-                                        faire pour toi aujourd'hui ?
+                                        Salut ! Créer une nouvelle conversation
+                                        ou sélectionner une conversation
+                                        existante pour commencer. Ensuite tu
+                                        pourras me poser une question.
                                     </p>
                                 </div>
                             </div>
@@ -778,7 +780,20 @@ onBeforeUnmount(() => {
 
             <!-- Zone de saisie -->
             <div class="border-t border-gray-700/50 bg-gray-900 px-4 py-4">
+                <!-- Ajout d'un message d'invite lorsqu'aucune conversation n'est sélectionnée -->
+                <div
+                    v-if="!currentConversation"
+                    class="mx-auto max-w-3xl text-center"
+                >
+                    <p class="text-gray-400">
+                        Veuillez créer une nouvelle conversation ou sélectionner
+                        une conversation existante pour commencer
+                    </p>
+                </div>
+
+                <!-- Formulaire masqué/désactivé si pas de conversation active -->
                 <form
+                    v-else
                     @submit.prevent="handleSubmit"
                     class="mx-auto max-w-3xl relative"
                 >
@@ -814,9 +829,7 @@ onBeforeUnmount(() => {
                         <!-- Input pour le message -->
                         <textarea
                             v-model="form.message"
-                            :key="`textarea-${
-                                currentConversation?.id || 'new'
-                            }`"
+                            :key="`textarea-${currentConversation?.id}`"
                             class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-24 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
                             :rows="1"
                             placeholder="Posez votre question..."
