@@ -18,6 +18,10 @@ return [
         'api_key' => env('OPENROUTER_API_KEY'),
     ],
 
+    'openweathermap' => [
+        'api_key' => env('OPENWEATHERMAP_API_KEY'),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
