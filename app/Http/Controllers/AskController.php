@@ -24,7 +24,12 @@ class AskController extends Controller
     {
         $this->chatService = $chatService;
         $this->setImageService(new \App\Services\ImageService());
+        Log::info('AskController initialisé');
     }
+
+    /**
+     * SECTION: PAGES ET AFFICHAGE
+     */
 
     /**
      * Affiche la page principale de chat
@@ -46,6 +51,10 @@ class AskController extends Controller
     }
 
     /**
+     * SECTION: TRAITEMENT DES MESSAGES
+     */
+
+    /**
      * Traite une demande de chat non streamée
      */
     public function ask(Request $request, $conversationId)
@@ -55,7 +64,8 @@ class AskController extends Controller
         try {
             Log::info('Nouvelle demande de chat', [
                 'user_id' => auth()->id(),
-                'conversation_id' => $conversationId
+                'conversation_id' => $conversationId,
+                'model' => $request->model
             ]);
 
             $conversation = $this->getAndVerifyConversation($conversationId);
@@ -92,26 +102,18 @@ class AskController extends Controller
         } catch (\Exception $e) {
             Log::error('Erreur lors du traitement de la demande', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
+                'conversation_id' => $conversationId
             ]);
 
             return back()->withErrors(['error' => $e->getMessage()]);
         }
     }
 
-    private function canAcceptNewMessage(Conversation $conversation, string $message): bool
-    {
-        $systemMessage = $this->buildSystemMessage();
-        $messages = $this->prepareMessages($conversation, $systemMessage);
 
-        // Ajoute le nouveau message pour la vérification
-        $messages[] = [
-            'role' => 'user',
-            'content' => $message
-        ];
-
-        return !$this->chatService->isConversationFull($messages, $conversation->model);
-    }
+    /**
+     * SECTION: STREAMING
+     */
 
     /**
      * Traite une demande de chat en streaming
@@ -124,7 +126,8 @@ class AskController extends Controller
             if (!$this->canAcceptNewMessage($conversation, $request->message)) {
                 Log::info('Conversation pleine', [
                     'conversation_id' => $conversation->id,
-                    'user_id' => auth()->id()
+                    'user_id' => auth()->id(),
+                    'model' => $request->model
                 ]);
 
                 throw new \Exception("Limite de contexte atteinte. Veuillez créer une nouvelle conversation.");
@@ -166,8 +169,23 @@ class AskController extends Controller
     }
 
     /**
-     * Méthodes privées utilitaires
+     * SECTION: MÉTHODES UTILITAIRES PRIVÉES
      */
+
+    private function canAcceptNewMessage(Conversation $conversation, string $message): bool
+    {
+        $systemMessage = $this->buildSystemMessage();
+        $messages = $this->prepareMessages($conversation, $systemMessage);
+
+        // Ajoute le nouveau message pour la vérification
+        $messages[] = [
+            'role' => 'user',
+            'content' => $message
+        ];
+
+        return !$this->chatService->isConversationFull($messages, $conversation->model);
+    }
+
     private function validateRequest(Request $request): void
     {
         $request->validate([

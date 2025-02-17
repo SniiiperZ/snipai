@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('title')->nullable();
-            $table->string('model')->default('meta-llama/llama-3.2-11b-vision-instruct:free');
+            $table->string('model')->default('meta-llama/llama-3.3-70b-instruct:free');
             $table->timestamps();
         });
     }

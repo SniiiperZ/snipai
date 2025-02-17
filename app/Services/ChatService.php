@@ -11,7 +11,7 @@ class ChatService
     private $apiKey;
     private $client;
     private $weatherService;
-    public const DEFAULT_MODEL = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+    public const DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
     public function __construct()
     {
