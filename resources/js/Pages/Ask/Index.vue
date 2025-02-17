@@ -309,7 +309,7 @@ async function loadMessages(conversationId) {
             // Transformer les données pour inclure les URLs des images
             conversationHistory.value = response.data.map((message) => ({
                 ...message,
-                imageUrl: message.image_url, // Ajouter l'URL de l'image aux données du message
+                imageUrl: message.image_url,
             }));
             await nextTick();
             await scrollToBottom();
@@ -364,16 +364,19 @@ const confirmingDeletion = ref(false);
 const conversationToDelete = ref(null);
 const isDeleting = ref(false);
 
+// Fonction pour confirmer la suppression
 const confirmDelete = (conversation) => {
     conversationToDelete.value = conversation;
     confirmingDeletion.value = true;
 };
 
+// Fonction pour fermer la modale de suppression
 const closeDeleteModal = () => {
     confirmingDeletion.value = false;
     conversationToDelete.value = null;
 };
 
+// Fonction pour supprimer une conversation
 const deleteConversation = () => {
     if (!conversationToDelete.value) return;
 
@@ -426,7 +429,6 @@ const filteredConversations = computed(() => {
 // Remplacez la fonction handleSearch existante
 const handleSearch = () => {
     isSearching.value = true;
-    // La recherche est maintenant gérée par le computed filteredConversations
 };
 
 // Fonction pour mettre à jour le modèle de la conversation
@@ -443,7 +445,7 @@ async function updateConversationModel(newModel) {
     }
 }
 
-// Modifier le watcher pour form.model
+// Ajoutez un watcher pour le modèle
 watch(
     () => form.model,
     async (newModel) => {
@@ -453,27 +455,28 @@ watch(
     }
 );
 
-// Ajoutez cette fonction dans la section <script setup>
+// Fonction pour révoquer l'URL de l'objet
 function revokeObjectURL(url) {
     if (url && url.startsWith("blob:")) {
         URL.revokeObjectURL(url);
     }
 }
 
-// Modifiez le watcher pour selectedImage
+// Ajoutez un watcher pour l'image sélectionnée
 watch(selectedImage, (newVal, oldVal) => {
     if (oldVal) {
         revokeObjectURL(URL.createObjectURL(oldVal));
     }
 });
 
-// Ajoutez un hook onBeforeUnmount pour nettoyer
+// Révoquer les URLs des images avant de quitter
 onBeforeUnmount(() => {
     if (selectedImage.value) {
         revokeObjectURL(URL.createObjectURL(selectedImage.value));
     }
 });
 
+// Calcul de l'état de la conversation
 const isConversationFull = computed(() => {
     if (!currentConversation.value || !conversationHistory.value) return false;
 
