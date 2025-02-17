@@ -375,6 +375,30 @@ const logout = () => {
                         >
                             Dashboard
                         </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('ask.index')"
+                            :active="route().current('ask.index')"
+                        >
+                            SnipAI
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('instructions.index')"
+                            :active="route().current('instructions.index')"
+                        >
+                            Instructions personnalisées
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('behavior.index')"
+                            :active="route().current('behavior.index')"
+                        >
+                            Comportement de l'assistant
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            :href="route('commands.index')"
+                            :active="route().current('commands.index')"
+                        >
+                            Commandes personnalisées
+                        </ResponsiveNavLink>
                     </div>
 
                     <!-- Responsive Settings Options -->

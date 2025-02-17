@@ -492,18 +492,18 @@ const isConversationFull = computed(() => {
 
 <template>
     <div class="flex h-screen">
-        <!-- Sidebar avec transition -->
+        <!-- Sidebar - Ajustez la largeur et la visibilité -->
         <transition
             enter-active-class="transition-all duration-300 ease-in-out"
             leave-active-class="transition-all duration-300 ease-in-out"
-            enter-from-class="-ml-64"
+            enter-from-class="-ml-64 sm:-ml-80"
             enter-to-class="ml-0"
             leave-from-class="ml-0"
-            leave-to-class="-ml-64"
+            leave-to-class="-ml-64 sm:-ml-80"
         >
             <div
                 v-show="sidebarVisible"
-                class="flex flex-col h-screen bg-gray-800 border-r border-gray-700 w-64"
+                class="fixed md:relative flex flex-col h-screen bg-gray-800 border-r border-gray-700 w-64 sm:w-80 z-50"
             >
                 <!-- Div des boutons en haut de la sidebar -->
                 <div
@@ -645,19 +645,19 @@ const isConversationFull = computed(() => {
             </svg>
         </button>
 
-        <!-- Zone principale -->
-        <div class="flex-1 flex flex-col transition-all duration-300">
-            <!-- En-tête -->
+        <!-- Zone principale - Ajustez les marges et le padding -->
+        <div class="flex-1 flex flex-col w-full transition-all duration-300">
+            <!-- En-tête - Rendre responsive -->
             <header
                 class="sticky top-0 z-10 border-b border-gray-700/50 bg-gray-900 backdrop-blur"
             >
                 <div
-                    class="mx-auto max-w-5xl px-4 py-3 flex justify-between items-center"
+                    class="mx-auto px-2 sm:px-4 py-2 sm:py-3 flex justify-between items-center"
                 >
                     <select
                         v-model="form.model"
                         @change="updateConversationModel(form.model)"
-                        class="max-w-s rounded-lg bg-gray-800 px-4 py-2 text-sm text-gray-200 border border-gray-700"
+                        class="max-w-[150px] sm:max-w-xs rounded-lg bg-gray-800 px-2 sm:px-4 py-1 sm:py-2 text-xs sm:text-sm text-gray-200 border border-gray-700"
                         required
                     >
                         <option
@@ -698,25 +698,27 @@ const isConversationFull = computed(() => {
                 </div>
             </header>
 
-            <!-- Zone des messages -->
+            <!-- Zone des messages - Ajuster les marges -->
             <div
                 ref="messagesContainer"
-                class="flex-1 overflow-y-auto px-4 py-8 bg-gray-800"
+                class="flex-1 overflow-y-auto px-2 sm:px-4 py-4 sm:py-8 bg-gray-800"
             >
-                <div class="mx-auto max-w-3xl space-y-6">
+                <div class="mx-auto max-w-3xl space-y-4 sm:space-y-6">
                     <!-- Message d'accueil -->
                     <div
                         v-if="conversationHistory.length === 0"
-                        class="flex items-start gap-4 px-4"
+                        class="flex items-start gap-2 sm:gap-4 px-2 sm:px-4"
                     >
                         <div
-                            class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
+                            class="size-6 sm:size-8 rounded-full bg-blue-600 flex items-center justify-center"
                         >
-                            <span class="text-white text-sm">AI</span>
+                            <span class="text-white text-xs sm:text-sm"
+                                >AI</span
+                            >
                         </div>
                         <div class="flex-1 space-y-2">
                             <div
-                                class="bg-gray-900 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                                class="bg-gray-900 rounded-2xl rounded-tl-none px-3 sm:px-4 py-2 sm:py-3 max-w-[90%] sm:max-w-[80%]"
                             >
                                 <div class="prose prose-invert max-w-none">
                                     <p>
@@ -738,18 +740,20 @@ const isConversationFull = computed(() => {
                         <!-- Message utilisateur -->
                         <div
                             v-if="conversation.question"
-                            class="flex flex-row-reverse items-start gap-4 px-4"
+                            class="flex flex-row-reverse items-start gap-2 sm:gap-4 px-2 sm:px-4"
                         >
                             <div
-                                class="size-8 rounded-full bg-emerald-600 flex items-center justify-center"
+                                class="size-6 sm:size-8 rounded-full bg-emerald-600 flex items-center justify-center"
                             >
-                                <span class="text-white text-sm">U</span>
+                                <span class="text-white text-xs sm:text-sm"
+                                    >U</span
+                                >
                             </div>
                             <div class="flex-1 space-y-2">
                                 <div class="flex flex-col items-end">
                                     <!-- Message texte -->
                                     <p
-                                        class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] break-words whitespace-pre-wrap"
+                                        class="bg-emerald-600/20 text-gray-200 rounded-2xl rounded-tr-none px-3 sm:px-4 py-2 sm:py-2 max-w-[90%] sm:max-w-[80%] break-words whitespace-pre-wrap"
                                     >
                                         {{ conversation.question }}
                                     </p>
@@ -758,7 +762,7 @@ const isConversationFull = computed(() => {
                                     <img
                                         v-if="conversation.imageUrl"
                                         :src="conversation.imageUrl"
-                                        class="mt-2 max-w-[80%] max-h-64 rounded-lg object-contain"
+                                        class="mt-2 max-w-[90%] sm:max-w-[80%] max-h-64 rounded-lg object-contain"
                                         alt="Image envoyée"
                                     />
                                 </div>
@@ -768,16 +772,18 @@ const isConversationFull = computed(() => {
                         <!-- Réponse IA -->
                         <div
                             v-if="conversation.answer"
-                            class="flex items-start gap-4 px-4"
+                            class="flex items-start gap-2 sm:gap-4 px-2 sm:px-4"
                         >
                             <div
-                                class="size-8 rounded-full bg-blue-600 flex items-center justify-center"
+                                class="size-6 sm:size-8 rounded-full bg-blue-600 flex items-center justify-center"
                             >
-                                <span class="text-white text-sm">AI</span>
+                                <span class="text-white text-xs sm:text-sm"
+                                    >AI</span
+                                >
                             </div>
                             <div class="flex-1 space-y-2">
                                 <div
-                                    class="bg-gray-900 rounded-2xl rounded-tl-none px-4 py-3 max-w-[80%]"
+                                    class="bg-gray-900 rounded-2xl rounded-tl-none px-3 sm:px-4 py-2 sm:py-3 max-w-[90%] sm:max-w-[80%]"
                                 >
                                     <div
                                         class="prose prose-invert max-w-none break-words whitespace-pre-wrap"
@@ -797,8 +803,10 @@ const isConversationFull = computed(() => {
                 </div>
             </div>
 
-            <!-- Zone de saisie -->
-            <div class="border-t border-gray-700/50 bg-gray-900 px-4 py-4">
+            <!-- Zone de saisie - Ajuster pour mobile -->
+            <div
+                class="border-t border-gray-700/50 bg-gray-900 px-2 sm:px-4 py-2 sm:py-4"
+            >
                 <!-- Ajout d'un message d'invite lorsqu'aucune conversation n'est sélectionnée -->
                 <div
                     v-if="!currentConversation"
@@ -825,7 +833,7 @@ const isConversationFull = computed(() => {
                     @submit.prevent="handleSubmit"
                     class="mx-auto max-w-3xl relative"
                 >
-                    <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 sm:gap-4">
                         <!-- Input pour l'image -->
                         <input
                             ref="imageInput"
@@ -837,7 +845,7 @@ const isConversationFull = computed(() => {
                         <button
                             type="button"
                             @click="$refs.imageInput.click()"
-                            class="p-2 text-gray-400 hover:text-gray-300"
+                            class="p-1 sm:p-2 text-gray-400 hover:text-gray-300"
                         >
                             <svg
                                 class="w-6 h-6"
@@ -858,7 +866,7 @@ const isConversationFull = computed(() => {
                         <textarea
                             v-model="form.message"
                             :key="`textarea-${currentConversation?.id}`"
-                            class="w-full rounded-lg bg-gray-800 border border-gray-700 p-4 pr-24 text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
+                            class="w-full rounded-lg bg-gray-800 border border-gray-700 p-2 sm:p-4 pr-16 sm:pr-24 text-sm sm:text-base text-gray-200 placeholder-gray-400 focus:outline-none focus:border-emerald-600 resize-none"
                             :rows="1"
                             placeholder="Posez votre question..."
                             required
@@ -872,7 +880,7 @@ const isConversationFull = computed(() => {
                                 isLoading ||
                                 (!form.message.trim() && !selectedImage)
                             "
-                            class="p-2 text-gray-400 hover:text-gray-300"
+                            class="p-1 sm:p-2 text-gray-400 hover:text-gray-300"
                         >
                             <svg
                                 class="w-6 h-6"
@@ -891,7 +899,7 @@ const isConversationFull = computed(() => {
                     </div>
 
                     <!-- Prévisualisation de l'image -->
-                    <div v-if="selectedImage" class="mt-2">
+                    <div v-if="selectedImage" class="mt-2 relative">
                         <img
                             :src="
                                 selectedImage
@@ -903,10 +911,11 @@ const isConversationFull = computed(() => {
                         />
                         <button
                             @click="selectedImage = null"
-                            class="absolute top-2 right-2 text-gray-400 hover:text-gray-300"
+                            class="absolute -top-2 -right-2 p-1 bg-gray-800 rounded-full text-gray-400 hover:text-gray-300 border border-gray-700"
+                            title="Supprimer l'image"
                         >
                             <svg
-                                class="w-5 h-5"
+                                class="w-4 h-4"
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
@@ -991,5 +1000,27 @@ const isConversationFull = computed(() => {
 ::-webkit-scrollbar-thumb {
     background: #374151;
     border-radius: 5px;
+}
+
+/* Ajoutez ces styles pour la gestion du responsive */
+@media (max-width: 640px) {
+    .prose {
+        font-size: 0.875rem;
+    }
+
+    .code-block {
+        margin: 0.5rem 0;
+    }
+
+    .hljs {
+        font-size: 0.75rem;
+    }
+}
+
+/* Ajustez la scrollbar pour les appareils tactiles */
+@media (hover: none) {
+    ::-webkit-scrollbar {
+        width: 0px;
+    }
 }
 </style>
